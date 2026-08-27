@@ -4,17 +4,22 @@
 @theme {
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
-  --color-ink: #070b14;
-  --color-panel: #0e1626;
-  --color-panel-2: #132033;
-  --color-line: #22324a;
-  --color-muted: #8ea0b8;
-  --color-accent: #22d3ee;
-  --color-success: #34d399;
-  --color-danger: #f87171;
-  --color-warning: #fbbf24;
-  --color-unstable: #fb923c;
-  --color-info: #7dd3fc;
+  --color-ink: #0f172a;
+  --color-page: #f4f7fb;
+  --color-panel: #ffffff;
+  --color-panel-2: #f1f5f9;
+  --color-line: #d7e0ea;
+  --color-muted: #5b6b80;
+  --color-accent: #0e7490;
+  --color-success: #059669;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+  --color-unstable: #ea580c;
+  --color-info: #0284c7;
+}
+
+html {
+  color-scheme: light;
 }
 
 html,
@@ -25,23 +30,36 @@ body,
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 600px at 10% -10%, #12203a 0%, #070b14 45%);
-  color: #e8eef8;
+  background: radial-gradient(1200px 600px at 8% -12%, #e8f4f8 0%, #f4f7fb 42%);
+  color: var(--color-ink);
   font-family: var(--font-sans);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2a3d5c transparent;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font-family: inherit;
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  background-color: var(--color-panel);
+  color: var(--color-ink);
+}
+
+::placeholder {
+  color: var(--color-muted);
 }
 
 ::selection {
-  background: #155e75;
-  color: #ecfeff;
+  background: #a5f3fc;
+  color: #164e63;
 }

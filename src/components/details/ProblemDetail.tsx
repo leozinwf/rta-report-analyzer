@@ -1,8 +1,11 @@
 import { CATEGORY_LABELS } from "../../data/labels";
 import type { ErrorAnalysis } from "../../types";
 import { formatNumber, formatPercent } from "../../utils/format";
+import { normalizeKey } from "../../utils/text";
 import { CategoryBadge, EventTypeBadge, SeverityBadge } from "../common/Badge";
 import { Modal } from "../common/Modal";
+import { RobotNameCell } from "../common/RobotNameCell";
+import { TokenCell } from "../common/TokenCell";
 
 export function ProblemDetail({
   problem,
@@ -35,18 +38,34 @@ export function ProblemDetail({
             <h3 className="mb-2 text-sm font-semibold">Robôs afetados</h3>
             <div className="flex flex-wrap gap-2">
               {problem.robots.map((robot) => (
-                <span key={robot} className="rounded-md bg-panel-2 px-2 py-1 text-xs">
-                  {robot}
+                <span key={robot} className="inline-flex items-center rounded-md bg-panel-2 px-2 py-1 text-xs">
+                  <RobotNameCell
+                    name={robot}
+                    compact
+                    executionFilter={(row) => normalizeKey(row.message) === normalizeKey(problem.message)}
+                  />
                 </span>
               ))}
             </div>
           </div>
+          {problem.sampleIds.length ? (
+            <div>
+              <h3 className="mb-2 text-sm font-semibold">Tokens de exemplo</h3>
+              <ul className="space-y-2">
+                {problem.sampleIds.map((token) => (
+                  <li key={token}>
+                    <TokenCell token={token} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div>
             <h3 className="mb-2 text-sm font-semibold">Mensagens relacionadas</h3>
             <ul className="space-y-1 text-sm">
               {problem.relatedMessages.map((item) => (
                 <li key={item.message} className="flex justify-between gap-4">
-                  <span className="text-slate-300">{item.message || "N/D"}</span>
+                  <span className="text-ink">{item.message || "N/D"}</span>
                   <span className="font-mono text-muted">{formatNumber(item.count)}</span>
                 </li>
               ))}

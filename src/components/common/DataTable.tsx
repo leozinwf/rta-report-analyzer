@@ -68,7 +68,7 @@ export function DataTable<T>({
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`whitespace-nowrap px-4 py-3 font-semibold ${column.align === "right" ? "text-right" : ""} ${column.sortValue ? "cursor-pointer select-none hover:text-white" : ""}`}
+                  className={`whitespace-nowrap px-4 py-3 font-semibold ${column.align === "right" ? "text-right" : ""} ${column.sortValue ? "cursor-pointer select-none hover:text-ink" : ""}`}
                   onClick={column.sortValue ? () => toggleSort(column.key) : undefined}
                 >
                   {column.header}

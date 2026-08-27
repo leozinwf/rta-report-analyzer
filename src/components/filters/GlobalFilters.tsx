@@ -24,7 +24,7 @@ function ChipSelect({
           const value = event.target.value;
           if (value && !selected.includes(value)) onChange([...selected, value]);
         }}
-        className="mt-1 w-full rounded-lg border border-line bg-panel px-2 py-1.5 text-sm text-white"
+        className="mt-1 w-full rounded-lg border border-line bg-panel px-2 py-1.5 text-sm text-ink"
       >
         <option value="">Todos</option>
         {values
@@ -42,7 +42,7 @@ function ChipSelect({
               key={value}
               type="button"
               onClick={() => onChange(selected.filter((item) => item !== value))}
-              className="rounded-md bg-panel-2 px-2 py-0.5 text-[11px] text-cyan-200"
+              className="rounded-md bg-cyan-50 px-2 py-0.5 text-[11px] text-cyan-800"
             >
               {values.find((item) => item.value === value)?.label ?? value} ×
             </button>
@@ -86,7 +86,7 @@ export function GlobalFilters() {
             max={maxDate}
             value={filters.dateFrom ?? ""}
             onChange={(event) => setFilters({ ...filters, dateFrom: event.target.value || undefined })}
-            className="mt-1 block rounded-lg border border-line bg-panel px-2 py-1.5 text-sm text-white"
+            className="mt-1 block rounded-lg border border-line bg-panel px-2 py-1.5 text-sm text-ink"
           />
         </label>
         <label className="text-xs text-muted">
@@ -97,7 +97,7 @@ export function GlobalFilters() {
             max={maxDate}
             value={filters.dateTo ?? ""}
             onChange={(event) => setFilters({ ...filters, dateTo: event.target.value || undefined })}
-            className="mt-1 block rounded-lg border border-line bg-panel px-2 py-1.5 text-sm text-white"
+            className="mt-1 block rounded-lg border border-line bg-panel px-2 py-1.5 text-sm text-ink"
           />
         </label>
         <ChipSelect label="Robô" values={robots.map((value) => ({ value, label: value }))} selected={filters.robots} onChange={(robots) => setFilters({ ...filters, robots })} />

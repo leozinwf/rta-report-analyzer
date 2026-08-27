@@ -16,13 +16,22 @@ import { CATEGORY_LABELS, EVENT_TYPE_LABELS } from "../data/labels";
 import { useReport } from "../context/ReportContext";
 import type { ErrorAnalysis } from "../types";
 import { formatNumber, formatPercent } from "../utils/format";
+import { CHART_AXIS, CHART_COLORS, CHART_TOOLTIP } from "../utils/chartTheme";
 import { CategoryBadge, EventTypeBadge, SeverityBadge } from "../components/common/Badge";
 import { EmptyState } from "../components/common/EmptyState";
+import { RobotNameCell } from "../components/common/RobotNameCell";
 import { SectionHeader } from "../components/common/SectionHeader";
 import { StatCard } from "../components/common/StatCard";
 import { ProblemDetail } from "../components/details/ProblemDetail";
 
-const PIE_COLORS = ["#34d399", "#f87171", "#fb923c", "#94a3b8", "#fbbf24", "#64748b"];
+const PIE_COLORS = [
+  CHART_COLORS.success,
+  CHART_COLORS.danger,
+  CHART_COLORS.unstable,
+  CHART_COLORS.muted,
+  CHART_COLORS.warning,
+  "#475569",
+];
 
 export function DashboardPage() {
   const { filteredAnalysis } = useReport();
@@ -80,7 +89,7 @@ export function DashboardPage() {
 
       <section className="rounded-2xl border border-line bg-panel p-5">
         <SectionHeader title="Resumo do relatório" description="Gerado automaticamente a partir dos dados, sem IA." />
-        <div className="space-y-2 text-sm leading-relaxed text-slate-200">
+        <div className="space-y-2 text-sm leading-relaxed text-slate-700">
           {analysis.summary.map((line) => (
             <p key={line}>{line}</p>
           ))}
@@ -93,10 +102,10 @@ export function DashboardPage() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={healthData}>
-                <XAxis dataKey="name" stroke="#8ea0b8" fontSize={12} />
-                <YAxis stroke="#8ea0b8" fontSize={12} tickFormatter={(value) => `${Math.round(Number(value) * 100)}%`} />
-                <Tooltip formatter={(value) => formatPercent(Number(value))} contentStyle={{ background: "#0e1626", border: "1px solid #22324a" }} />
-                <Bar dataKey="value" fill="#22d3ee" radius={[6, 6, 0, 0]} />
+                <XAxis dataKey="name" stroke={CHART_AXIS} fontSize={12} />
+                <YAxis stroke={CHART_AXIS} fontSize={12} tickFormatter={(value) => `${Math.round(Number(value) * 100)}%`} />
+                <Tooltip formatter={(value) => formatPercent(Number(value))} contentStyle={CHART_TOOLTIP} />
+                <Bar dataKey="value" fill={CHART_COLORS.accent} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -111,7 +120,7 @@ export function DashboardPage() {
                     <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => formatNumber(Number(value))} contentStyle={{ background: "#0e1626", border: "1px solid #22324a" }} />
+                <Tooltip formatter={(value) => formatNumber(Number(value))} contentStyle={CHART_TOOLTIP} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -154,13 +163,13 @@ export function DashboardPage() {
       </section>
 
       {analysis.anomalies.length ? (
-        <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <SectionHeader title="Anomalias detectadas" description="Regras estatísticas simples sobre este relatório. Sem histórico externo." />
           <ul className="space-y-3">
             {analysis.anomalies.map((anomaly) => (
               <li key={anomaly.id} className="rounded-xl border border-line bg-panel px-4 py-3">
-                <p className="text-sm font-semibold text-amber-200">⚠ {anomaly.title}</p>
-                <p className="mt-1 text-sm text-slate-300">{anomaly.description}</p>
+                <p className="text-sm font-semibold text-amber-800">⚠ {anomaly.title}</p>
+                <p className="mt-1 text-sm text-slate-600">{anomaly.description}</p>
               </li>
             ))}
           </ul>
@@ -200,7 +209,7 @@ export function DashboardPage() {
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
-                <span className="font-mono text-white">{formatNumber(item.count)} ocorrências</span>
+                <span className="font-mono text-ink">{formatNumber(item.count)} ocorrências</span>
                 <span>{formatPercent(item.percent)} das execuções</span>
                 <span>{formatNumber(item.robotCount)} robôs afetados</span>
               </div>
@@ -223,10 +232,12 @@ export function DashboardPage() {
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="font-semibold">{robot.robot}</p>
+                  <div className="font-semibold">
+                    <RobotNameCell name={robot.robot} />
+                  </div>
                   <p className="text-xs text-muted">{formatNumber(robot.total)} execuções</p>
                 </div>
-                <p className="font-mono text-lg text-orange-300">{robot.problemScore.toFixed(1)}</p>
+                <p className="font-mono text-lg text-orange-700">{robot.problemScore.toFixed(1)}</p>
               </div>
               <p className="mt-3 text-sm text-muted">
                 Sucesso {formatPercent(robot.successRate)} · Erros {formatPercent(robot.errorRate)}

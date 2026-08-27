@@ -89,7 +89,7 @@ export function TenantDetailPage() {
         </div>
         <button
           type="button"
-          className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-ink"
+          className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
           onClick={() => {
             setFilters({ ...filters, tenants: [tenant.tenant] });
             navigate("/execucoes");

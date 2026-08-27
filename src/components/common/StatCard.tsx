@@ -9,12 +9,12 @@ interface StatCardProps {
 }
 
 const TONE: Record<NonNullable<StatCardProps["tone"]>, string> = {
-  neutral: "from-cyan-500/15 to-transparent text-cyan-300",
-  success: "from-emerald-500/15 to-transparent text-emerald-300",
-  danger: "from-red-500/15 to-transparent text-red-300",
-  warning: "from-amber-500/15 to-transparent text-amber-300",
-  unstable: "from-orange-500/15 to-transparent text-orange-300",
-  muted: "from-slate-500/15 to-transparent text-slate-300",
+  neutral: "from-cyan-100 to-transparent text-cyan-800",
+  success: "from-emerald-100 to-transparent text-emerald-800",
+  danger: "from-red-100 to-transparent text-red-700",
+  warning: "from-amber-100 to-transparent text-amber-800",
+  unstable: "from-orange-100 to-transparent text-orange-700",
+  muted: "from-slate-100 to-transparent text-slate-700",
 };
 
 export function StatCard({ label, value, hint, icon: Icon, tone = "neutral" }: StatCardProps) {

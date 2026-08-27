@@ -3,6 +3,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recha
 import { SectionHeader } from "../components/common/SectionHeader";
 import { useReport } from "../context/ReportContext";
 import { formatNumber, formatPercent } from "../utils/format";
+import { CHART_AXIS, CHART_COLORS, CHART_TOOLTIP } from "../utils/chartTheme";
 
 export function EnvironmentsPage() {
   const { filteredAnalysis } = useReport();
@@ -25,12 +26,12 @@ export function EnvironmentsPage() {
               <Item label="Taxa de sucesso" value={formatPercent(env.successRate)} />
             </dl>
             {env.concentratedProblems.length ? (
-              <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm">
-                <p className="mb-2 inline-flex items-center gap-2 font-medium text-amber-200">
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+                <p className="mb-2 inline-flex items-center gap-2 font-medium text-amber-800">
                   <AlertTriangle className="size-4" /> Problemas concentrados neste ambiente
                 </p>
                 {env.concentratedProblems.map((problem) => (
-                  <p key={problem.message} className="text-amber-100/90">
+                  <p key={problem.message} className="text-amber-900">
                     {problem.message} · {formatPercent(problem.share)} das ocorrências
                   </p>
                 ))}
@@ -43,12 +44,12 @@ export function EnvironmentsPage() {
         <div className="h-72 rounded-2xl border border-line bg-panel p-5">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={environments.map((env) => ({ name: env.environment.toUpperCase(), sucessos: env.successCount, erros: env.errorCount, instavel: env.instabilityCount }))}>
-              <XAxis dataKey="name" stroke="#8ea0b8" />
-              <YAxis stroke="#8ea0b8" />
-              <Tooltip contentStyle={{ background: "#0e1626", border: "1px solid #22324a" }} />
-              <Bar dataKey="sucessos" fill="#34d399" />
-              <Bar dataKey="erros" fill="#f87171" />
-              <Bar dataKey="instavel" fill="#fb923c" />
+              <XAxis dataKey="name" stroke={CHART_AXIS} />
+              <YAxis stroke={CHART_AXIS} />
+              <Tooltip contentStyle={CHART_TOOLTIP} />
+              <Bar dataKey="sucessos" fill={CHART_COLORS.success} />
+              <Bar dataKey="erros" fill={CHART_COLORS.danger} />
+              <Bar dataKey="instavel" fill={CHART_COLORS.unstable} />
             </BarChart>
           </ResponsiveContainer>
         </div>

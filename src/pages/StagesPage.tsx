@@ -1,7 +1,9 @@
 import { DataTable, type Column } from "../components/common/DataTable";
+import { RobotNameCell } from "../components/common/RobotNameCell";
 import { SectionHeader } from "../components/common/SectionHeader";
 import { CategoryBadge, SeverityBadge } from "../components/common/Badge";
 import { useReport } from "../context/ReportContext";
+import { extractStage } from "../services/analysis/stages";
 import type { StageAnalysis } from "../types";
 import { formatNumber } from "../utils/format";
 
@@ -35,8 +37,12 @@ export function StagesPage() {
           <h3 className="text-sm font-semibold">Robôs afetados em {stages[0].stage}</h3>
           <div className="mt-3 flex flex-wrap gap-2">
             {stages[0].robots.map((robot) => (
-              <span key={robot} className="rounded-md bg-panel-2 px-2 py-1 text-xs">
-                {robot}
+              <span key={robot} className="inline-flex items-center rounded-md bg-panel-2 px-2 py-1 text-xs">
+                <RobotNameCell
+                  name={robot}
+                  compact
+                  executionFilter={(row) => (row.stage || extractStage(row.message)) === stages[0].stage}
+                />
               </span>
             ))}
           </div>

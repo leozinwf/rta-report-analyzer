@@ -18,7 +18,7 @@ export function Sidebar() {
   const { reset } = useReport();
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-ink/80">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
       <div className="border-b border-line px-5 py-5">
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-accent">Observabilidade</p>
         <h1 className="mt-1 text-base font-semibold leading-tight">RTA Report Analyzer</h1>
@@ -30,7 +30,7 @@ export function Sidebar() {
             to={item.to}
             className={({ isActive }) =>
               `block rounded-lg px-3 py-2 text-sm transition ${
-                isActive ? "bg-panel-2 text-white" : "text-muted hover:bg-panel hover:text-white"
+                isActive ? "bg-cyan-50 text-cyan-900" : "text-muted hover:bg-panel-2 hover:text-ink"
               }`
             }
           >

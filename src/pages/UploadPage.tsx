@@ -50,7 +50,7 @@ export function UploadPage() {
         <FileSpreadsheet className="mx-auto size-12 text-accent" />
         <p className="mt-4 text-lg font-medium">Arraste seu relatório Excel aqui</p>
         <p className="mt-1 text-sm text-muted">ou</p>
-        <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-ink hover:bg-cyan-300">
+        <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800">
           <Upload className="size-4" />
           Selecionar arquivo
           <input
@@ -73,20 +73,20 @@ export function UploadPage() {
       ) : null}
 
       {error ? (
-        <div className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200">
+        <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
           {error}
         </div>
       ) : null}
 
       {warnings.map((warning) => (
-        <div key={warning} className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+        <div key={warning} className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
           {warning}
         </div>
       ))}
 
       {parsed && (phase === "parsed" || phase === "analyzing" || phase === "ready") ? (
         <div className="mt-8 rounded-2xl border border-line bg-panel p-6">
-          <p className="text-sm font-semibold text-emerald-300">Relatório carregado</p>
+          <p className="text-sm font-semibold text-emerald-700">Relatório carregado</p>
           <p className="mt-3 text-2xl font-semibold">{formatNumber(parsed.meta.rowCount)} execuções encontradas</p>
           <p className="mt-2 text-sm text-muted">
             {parsed.meta.sheetNames.length} aba analisada · {parsed.meta.columns.length} colunas identificadas
@@ -100,7 +100,7 @@ export function UploadPage() {
             <button
               type="button"
               onClick={() => void analyze()}
-              className="mt-5 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-ink hover:bg-cyan-300"
+              className="mt-5 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800"
             >
               Analisar relatório
             </button>

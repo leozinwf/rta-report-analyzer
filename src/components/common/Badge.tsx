@@ -2,38 +2,38 @@ import type { EventType, ProblemCategory, RobotHealthStatus, Severity } from "..
 import { CATEGORY_LABELS, EVENT_TYPE_LABELS, HEALTH_LABELS, SEVERITY_LABELS } from "../../data/labels";
 
 const SEVERITY_CLASS: Record<Severity, string> = {
-  critical: "bg-red-500/15 text-red-300 border-red-500/30",
-  high: "bg-orange-500/15 text-orange-300 border-orange-500/30",
-  medium: "bg-amber-500/15 text-amber-200 border-amber-500/30",
-  low: "bg-sky-500/15 text-sky-300 border-sky-500/30",
-  info: "bg-slate-500/15 text-slate-300 border-slate-500/30",
+  critical: "bg-red-50 text-red-700 border-red-200",
+  high: "bg-orange-50 text-orange-700 border-orange-200",
+  medium: "bg-amber-50 text-amber-800 border-amber-200",
+  low: "bg-sky-50 text-sky-700 border-sky-200",
+  info: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
 const STATUS_CLASS: Record<string, string> = {
-  Sucesso: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  Erro: "bg-red-500/15 text-red-300 border-red-500/30",
-  "Site Instável": "bg-orange-500/15 text-orange-300 border-orange-500/30",
-  "Sem Resultados": "bg-slate-500/15 text-slate-300 border-slate-500/30",
-  Aviso: "bg-amber-500/15 text-amber-200 border-amber-500/30",
-  Pendente: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
-  Processando: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
-  Cancelado: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
+  Sucesso: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Erro: "bg-red-50 text-red-700 border-red-200",
+  "Site Instável": "bg-orange-50 text-orange-700 border-orange-200",
+  "Sem Resultados": "bg-slate-50 text-slate-600 border-slate-200",
+  Aviso: "bg-amber-50 text-amber-800 border-amber-200",
+  Pendente: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  Processando: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  Cancelado: "bg-zinc-50 text-zinc-600 border-zinc-200",
 };
 
 const EVENT_CLASS: Record<EventType, string> = {
-  technical_error: "bg-red-500/15 text-red-300 border-red-500/30",
-  business_result: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
-  instability: "bg-orange-500/15 text-orange-300 border-orange-500/30",
-  warning: "bg-amber-500/15 text-amber-200 border-amber-500/30",
-  success: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  unknown: "bg-slate-500/15 text-slate-300 border-slate-500/30",
+  technical_error: "bg-red-50 text-red-700 border-red-200",
+  business_result: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  instability: "bg-orange-50 text-orange-700 border-orange-200",
+  warning: "bg-amber-50 text-amber-800 border-amber-200",
+  success: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  unknown: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
 const HEALTH_CLASS: Record<RobotHealthStatus, string> = {
-  healthy: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  watch: "bg-amber-500/15 text-amber-200 border-amber-500/30",
-  critical: "bg-red-500/15 text-red-300 border-red-500/30",
-  unknown: "bg-slate-500/15 text-slate-300 border-slate-500/30",
+  healthy: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  watch: "bg-amber-50 text-amber-800 border-amber-200",
+  critical: "bg-red-50 text-red-700 border-red-200",
+  unknown: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
 interface BadgeProps {
@@ -54,11 +54,11 @@ export function SeverityBadge({ value }: { value: Severity }) {
 }
 
 export function CategoryBadge({ value }: { value: ProblemCategory }) {
-  return <Base className="bg-cyan-500/10 text-cyan-200 border-cyan-500/20">{CATEGORY_LABELS[value]}</Base>;
+  return <Base className="bg-cyan-50 text-cyan-800 border-cyan-200">{CATEGORY_LABELS[value]}</Base>;
 }
 
 export function StatusBadge({ value }: { value: string }) {
-  return <Base className={STATUS_CLASS[value] ?? "bg-slate-500/15 text-slate-300 border-slate-500/30"}>{value || "N/D"}</Base>;
+  return <Base className={STATUS_CLASS[value] ?? "bg-slate-50 text-slate-600 border-slate-200"}>{value || "N/D"}</Base>;
 }
 
 export function EventTypeBadge({ value }: { value: EventType }) {

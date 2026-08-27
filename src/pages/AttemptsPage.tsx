@@ -1,9 +1,11 @@
 import { ArrowDown, Ban, CheckCircle2, RotateCcw } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { RobotNameCell } from "../components/common/RobotNameCell";
 import { SectionHeader } from "../components/common/SectionHeader";
 import { StatCard } from "../components/common/StatCard";
 import { useReport } from "../context/ReportContext";
 import { formatNumber, formatPercent } from "../utils/format";
+import { CHART_AXIS, CHART_COLORS, CHART_TOOLTIP } from "../utils/chartTheme";
 
 export function AttemptsPage() {
   const { filteredAnalysis } = useReport();
@@ -29,12 +31,12 @@ export function AttemptsPage() {
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={attempts.map((item) => ({ name: `Tentativa ${item.attempt}`, total: item.total, sucessos: item.successCount, erros: item.errorCount }))}>
-              <XAxis dataKey="name" stroke="#8ea0b8" fontSize={12} />
-              <YAxis stroke="#8ea0b8" fontSize={12} />
-              <Tooltip contentStyle={{ background: "#0e1626", border: "1px solid #22324a" }} />
-              <Bar dataKey="total" fill="#22d3ee" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="sucessos" fill="#34d399" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="erros" fill="#f87171" radius={[6, 6, 0, 0]} />
+              <XAxis dataKey="name" stroke={CHART_AXIS} fontSize={12} />
+              <YAxis stroke={CHART_AXIS} fontSize={12} />
+              <Tooltip contentStyle={CHART_TOOLTIP} />
+              <Bar dataKey="total" fill={CHART_COLORS.accent} radius={[6, 6, 0, 0]} />
+              <Bar dataKey="sucessos" fill={CHART_COLORS.success} radius={[6, 6, 0, 0]} />
+              <Bar dataKey="erros" fill={CHART_COLORS.danger} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -53,12 +55,15 @@ export function AttemptsPage() {
                     <div key={`${step}-${index}`}>
                       <p className="text-[11px] uppercase tracking-[0.14em] text-muted">Tentativa {index + 1}</p>
                       <p className="mt-1">{step}</p>
-                      {index < pattern.steps.length - 1 ? <ArrowDown className="my-2 size-4 text-orange-300" /> : null}
+                      {index < pattern.steps.length - 1 ? <ArrowDown className="my-2 size-4 text-orange-600" /> : null}
                     </div>
                   ))}
-                  <p className="mt-3 text-xs text-muted">
-                    Prioridade {pattern.priority} · {pattern.robots.join(", ")}
-                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+                    <span>Prioridade {pattern.priority}</span>
+                    {pattern.robots.map((robot) => (
+                      <RobotNameCell key={robot} name={robot} compact />
+                    ))}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -76,7 +81,7 @@ export function AttemptsPage() {
                     <div key={`${step}-${index}`}>
                       <p className="text-[11px] uppercase tracking-[0.14em] text-muted">Tentativa {index + 1}</p>
                       <p className="mt-1">{step}</p>
-                      {index < pattern.steps.length - 1 ? <ArrowDown className="my-2 size-4 text-emerald-300" /> : null}
+                      {index < pattern.steps.length - 1 ? <ArrowDown className="my-2 size-4 text-emerald-600" /> : null}
                     </div>
                   ))}
                 </li>
@@ -93,7 +98,9 @@ export function AttemptsPage() {
             {retries.persistentFailures.slice(0, 12).map((item) => (
               <li key={`${item.robot}-${item.message}`} className="flex justify-between gap-4 rounded-lg bg-panel-2 px-3 py-2">
                 <span>
-                  <span className="font-medium">{item.robot}</span>
+                  <span className="font-medium">
+                    <RobotNameCell name={item.robot} compact />
+                  </span>
                   <span className="block text-muted">{item.message}</span>
                 </span>
                 <span className="font-mono text-xs text-muted">

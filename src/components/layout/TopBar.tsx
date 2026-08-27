@@ -13,7 +13,7 @@ export function TopBar() {
   const analysis = filteredAnalysis;
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-ink/70 px-6 py-3">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-panel px-6 py-3">
       <div>
         <p className="text-[11px] uppercase tracking-[0.16em] text-muted">Relatório atual</p>
         <p className="font-medium">{parsed?.meta.fileName ?? "N/D"}</p>

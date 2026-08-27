@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { CategoryBadge, EventTypeBadge, SeverityBadge, StatusBadge } from "../components/common/Badge";
 import { DataTable, type Column } from "../components/common/DataTable";
+import { RobotNameCell } from "../components/common/RobotNameCell";
 import { SectionHeader } from "../components/common/SectionHeader";
+import { TokenCell } from "../components/common/TokenCell";
 import { useReport } from "../context/ReportContext";
 import { exportExecutionsCsv } from "../services/export/csv";
 import type { ClassifiedExecution } from "../types";
@@ -23,8 +25,8 @@ export function ExecutionsPage() {
   }, [filteredExecutions, query]);
 
   const columns: Column<ClassifiedExecution>[] = [
-    { key: "id", header: "ID", className: "max-w-[140px] truncate font-mono text-xs", sortValue: (row) => row.id, render: (row) => row.id || "N/D" },
-    { key: "robot", header: "Robô", sortValue: (row) => row.robot, render: (row) => row.robot || "N/D" },
+    { key: "id", header: "Token", className: "min-w-[220px]", sortValue: (row) => row.id, render: (row) => <TokenCell token={row.id} /> },
+    { key: "robot", header: "Robô", sortValue: (row) => row.robot, render: (row) => <RobotNameCell name={row.robot} /> },
     { key: "status", header: "Status", sortValue: (row) => row.status, render: (row) => <StatusBadge value={row.status} /> },
     { key: "message", header: "Mensagem", className: "max-w-[360px]", sortValue: (row) => row.message, render: (row) => row.message || "N/D" },
     { key: "category", header: "Categoria", sortValue: (row) => row.category, render: (row) => <CategoryBadge value={row.category} /> },

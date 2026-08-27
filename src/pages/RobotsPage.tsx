@@ -5,13 +5,24 @@ import { HealthBadge, StatusBadge } from "../components/common/Badge";
 import { DataTable, type Column } from "../components/common/DataTable";
 import { EmptyState } from "../components/common/EmptyState";
 import { Modal } from "../components/common/Modal";
+import { RobotNameCell } from "../components/common/RobotNameCell";
 import { SectionHeader } from "../components/common/SectionHeader";
+import { TokenCell } from "../components/common/TokenCell";
 import { useReport } from "../context/ReportContext";
 import type { RobotAnalysis } from "../types";
 import { formatNumber, formatPercent } from "../utils/format";
+import { CHART_COLORS, CHART_TOOLTIP } from "../utils/chartTheme";
 import { Bot } from "lucide-react";
 
-const COLORS = ["#34d399", "#f87171", "#fb923c", "#94a3b8", "#fbbf24", "#22d3ee", "#64748b"];
+const COLORS = [
+  CHART_COLORS.success,
+  CHART_COLORS.danger,
+  CHART_COLORS.unstable,
+  CHART_COLORS.muted,
+  CHART_COLORS.warning,
+  CHART_COLORS.accent,
+  "#475569",
+];
 
 export function RobotsPage() {
   const { filteredAnalysis } = useReport();
@@ -29,7 +40,7 @@ export function RobotsPage() {
   }, [robots, query, status]);
 
   const columns: Column<RobotAnalysis>[] = [
-    { key: "robot", header: "Robô", sortValue: (row) => row.robot, render: (row) => row.robot },
+    { key: "robot", header: "Robô", sortValue: (row) => row.robot, render: (row) => <RobotNameCell name={row.robot} /> },
     { key: "total", header: "Execuções", align: "right", sortValue: (row) => row.total, render: (row) => formatNumber(row.total) },
     { key: "success", header: "Sucessos", align: "right", sortValue: (row) => row.successCount, render: (row) => formatNumber(row.successCount) },
     { key: "error", header: "Erros", align: "right", sortValue: (row) => row.errorCount, render: (row) => formatNumber(row.errorCount) },
@@ -91,7 +102,10 @@ export function RobotDetailPage() {
           <Info label="Taxa de falha" value={formatPercent(robot.errorRate)} />
           <Info label="Problem score" value={robot.problemScore.toFixed(1)} />
         </div>
-        <HealthBadge value={robot.status} />
+        <div className="flex flex-wrap items-center gap-3">
+          <HealthBadge value={robot.status} />
+          <RobotNameCell name={robot.robot} />
+        </div>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -100,7 +114,7 @@ export function RobotDetailPage() {
                   <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ background: "#0e1626", border: "1px solid #22324a" }} />
+              <Tooltip contentStyle={CHART_TOOLTIP} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -123,7 +137,10 @@ export function RobotDetailPage() {
             <ul className="space-y-2">
               {sampleStatuses.map((row) => (
                 <li key={row.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate">{row.message || "N/D"}</span>
+                  <div className="min-w-0">
+                    <TokenCell token={row.id} />
+                    <p className="mt-1 truncate text-muted">{row.message || "N/D"}</p>
+                  </div>
                   <StatusBadge value={row.status} />
                 </li>
               ))}
@@ -132,7 +149,7 @@ export function RobotDetailPage() {
         ) : null}
         <button
           type="button"
-          className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-ink"
+          className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
           onClick={() => {
             setFilters({ ...filters, robots: [robot.robot] });
             navigate("/execucoes");
