@@ -12,7 +12,7 @@ import { useReport } from "../context/ReportContext";
 import type { RobotAnalysis } from "../types";
 import { formatNumber, formatPercent } from "../utils/format";
 import { CHART_COLORS, CHART_TOOLTIP } from "../utils/chartTheme";
-import { Bot } from "lucide-react";
+import { Bot, Check, Copy } from "lucide-react";
 
 const COLORS = [
   CHART_COLORS.success,
@@ -84,6 +84,7 @@ export function RobotDetailPage() {
   const { robotId } = useParams();
   const { filteredAnalysis, parsed, setFilters, filters } = useReport();
   const navigate = useNavigate();
+  const [copied, setCopied] = useState<"title" | "description" | "all" | null>(null);
   const robot = filteredAnalysis?.robots.find((item) => item.id === decodeURIComponent(robotId ?? ""));
 
   if (!robot) {
@@ -91,7 +92,16 @@ export function RobotDetailPage() {
   }
 
   const pieData = Object.entries(robot.statusDistribution).map(([name, value]) => ({ name, value }));
-  const sampleStatuses = parsed?.executions.filter((row) => (row.robotId || row.robot) === robot.id).slice(0, 8);
+  const robotExecutions = parsed?.executions.filter((row) => (row.robotId || row.robot) === robot.id) ?? [];
+  const sampleStatuses = robotExecutions.slice(0, 8);
+  const jiraTitle = `[RTA] ${robot.robot} apresentando erros`;
+  const jiraDescription = buildJiraDescription(robot, robotExecutions);
+
+  async function copyText(text: string, kind: "title" | "description" | "all") {
+    await navigator.clipboard.writeText(text);
+    setCopied(kind);
+    window.setTimeout(() => setCopied(null), 1800);
+  }
 
   return (
     <Modal open title={robot.robot} onClose={() => navigate("/robos")} wide>
@@ -105,6 +115,23 @@ export function RobotDetailPage() {
         <div className="flex flex-wrap items-center gap-3">
           <HealthBadge value={robot.status} />
           <RobotNameCell name={robot.robot} />
+        </div>
+        <div className="rounded-2xl border border-line bg-panel-2 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold">Preparar card do Jira</h3>
+              <p className="mt-1 text-xs text-muted">Gera título, problemas e exemplos de tokens automaticamente.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <CopyButton copied={copied === "title"} label="Copiar título" onClick={() => void copyText(jiraTitle, "title")} />
+              <CopyButton copied={copied === "description"} label="Copiar descrição" onClick={() => void copyText(jiraDescription, "description")} />
+              <CopyButton copied={copied === "all"} label="Copiar tudo" onClick={() => void copyText(`${jiraTitle}\n\n${jiraDescription}`, "all")} primary />
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border border-line bg-panel p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Título sugerido</p>
+            <p className="mt-1 text-sm font-medium">{jiraTitle}</p>
+          </div>
         </div>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
@@ -131,7 +158,7 @@ export function RobotDetailPage() {
             ))}
           </ol>
         </div>
-        {sampleStatuses?.length ? (
+        {sampleStatuses.length ? (
           <div>
             <h3 className="mb-2 text-sm font-semibold">Amostra de execuções</h3>
             <ul className="space-y-2">
@@ -159,6 +186,48 @@ export function RobotDetailPage() {
         </button>
       </div>
     </Modal>
+  );
+}
+
+function buildJiraDescription(
+  robot: RobotAnalysis,
+  executions: Array<{ id: string; message: string }>,
+): string {
+  const sections = robot.topProblems.map((problem, index) => {
+    const message = problem.message || "N/D";
+    const tokens = executions
+      .filter((row) => (row.message || "N/D") === message)
+      .map((row) => row.id)
+      .filter(Boolean)
+      .slice(0, 10);
+    const tokenText = tokens.length ? tokens.join("\n") : "Nenhum token de exemplo encontrado.";
+    return `${index + 1}. ${message} (${formatNumber(problem.count)} ocorrências)\n\nTokens:\n${tokenText}`;
+  });
+
+  return [
+    `Robô: ${robot.robot}`,
+    `Execuções: ${formatNumber(robot.total)}`,
+    `Sucessos: ${formatNumber(robot.successCount)}`,
+    `Erros: ${formatNumber(robot.errorCount)}`,
+    `Taxa de falha: ${formatPercent(robot.errorRate)}`,
+    "",
+    "### Principais problemas",
+    sections.length ? sections.join("\n\n") : "Nenhum problema agrupado encontrado.",
+  ].join("\n");
+}
+
+function CopyButton({ copied, label, onClick, primary = false }: { copied: boolean; label: string; onClick: () => void; primary?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={primary
+        ? "inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-800"
+        : "inline-flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2 text-xs font-semibold hover:border-accent/40"}
+    >
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      {copied ? "Copiado" : label}
+    </button>
   );
 }
 
