@@ -12,20 +12,23 @@ import { formatDateTime } from "../utils/date";
 export function ExecutionsPage() {
   const { filteredExecutions } = useReport();
   const [query, setQuery] = useState("");
+  const [platform, setPlatform] = useState("all");
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return filteredExecutions;
-    return filteredExecutions.filter((row) =>
-      [row.id, row.robot, row.status, row.message, row.tenant, row.environment]
+    return filteredExecutions.filter((row) => {
+      if (platform !== "all" && row.platform !== platform) return false;
+      if (!q) return true;
+      return [row.id, row.robot, row.status, row.message, row.tenant, row.environment, row.platform]
         .join(" ")
         .toLowerCase()
-        .includes(q),
-    );
-  }, [filteredExecutions, query]);
+        .includes(q);
+    });
+  }, [filteredExecutions, query, platform]);
 
   const columns: Column<ClassifiedExecution>[] = [
     { key: "id", header: "Token", className: "min-w-[220px]", sortValue: (row) => row.id, render: (row) => <TokenCell token={row.id} /> },
+    { key: "platform", header: "Sistema", sortValue: (row) => row.platform, render: (row) => <PlatformBadge value={row.platform} /> },
     { key: "robot", header: "Robô", sortValue: (row) => row.robot, render: (row) => <RobotNameCell name={row.robot} /> },
     { key: "status", header: "Status", sortValue: (row) => row.status, render: (row) => <StatusBadge value={row.status} /> },
     { key: "message", header: "Mensagem", className: "max-w-[360px]", sortValue: (row) => row.message, render: (row) => row.message || "N/D" },
@@ -42,9 +45,19 @@ export function ExecutionsPage() {
     <div>
       <SectionHeader
         title="Execuções"
-        description="Tabela paginada. A exportação respeita os filtros globais."
+        description="R = RTA · A = Automation. A exportação respeita os filtros desta tela."
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={platform}
+              onChange={(event) => setPlatform(event.target.value)}
+              className="rounded-lg border border-line bg-panel px-3 py-2 text-sm"
+            >
+              <option value="all">Todos os sistemas</option>
+              <option value="RTA">RTA</option>
+              <option value="Automation">Automation</option>
+              <option value="N/D">Não identificado</option>
+            </select>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -64,4 +77,14 @@ export function ExecutionsPage() {
       <DataTable rows={rows} columns={columns} rowKey={(row) => row.id} pageSize={25} />
     </div>
   );
+}
+
+function PlatformBadge({ value }: { value: "RTA" | "Automation" | "N/D" }) {
+  if (value === "RTA") {
+    return <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-800">RTA</span>;
+  }
+  if (value === "Automation") {
+    return <span className="inline-flex rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-800">Automation</span>;
+  }
+  return <span className="inline-flex rounded-full border border-line bg-panel-2 px-2 py-0.5 text-xs font-semibold text-muted">N/D</span>;
 }
