@@ -1,4 +1,4 @@
-export type { ClassifiedExecution, Classification, Execution, EventType, ProblemCategory, Severity, CanonicalStatus } from "./execution";
+export type { ClassifiedExecution, Classification, Execution, ExecutionPlatform, EventType, ProblemCategory, Severity, CanonicalStatus } from "./execution";
 export type {
   Anomaly,
   AttemptAnalysis,
