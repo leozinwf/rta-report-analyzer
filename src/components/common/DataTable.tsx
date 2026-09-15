@@ -15,6 +15,7 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   rowKey: (row: T, index: number) => string;
   pageSize?: number;
+  pageSizeOptions?: number[];
   onRowClick?: (row: T) => void;
   empty?: string;
 }
@@ -24,10 +25,12 @@ export function DataTable<T>({
   columns,
   rowKey,
   pageSize = 25,
+  pageSizeOptions,
   onRowClick,
   empty = "Nenhum registro encontrado.",
 }: DataTableProps<T>) {
   const [page, setPage] = useState(0);
+  const [currentPageSize, setCurrentPageSize] = useState(pageSize);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -46,9 +49,9 @@ export function DataTable<T>({
     return copy;
   }, [rows, columns, sortKey, sortDir]);
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(sorted.length / currentPageSize));
   const currentPage = Math.min(page, pageCount - 1);
-  const slice = sorted.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
+  const slice = sorted.slice(currentPage * currentPageSize, currentPage * currentPageSize + currentPageSize);
 
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
@@ -66,67 +69,29 @@ export function DataTable<T>({
           <thead className="bg-panel-2 text-[11px] uppercase tracking-[0.12em] text-muted">
             <tr>
               {columns.map((column) => (
-                <th
-                  key={column.key}
-                  className={`whitespace-nowrap px-4 py-3 font-semibold ${column.align === "right" ? "text-right" : ""} ${column.sortValue ? "cursor-pointer select-none hover:text-ink" : ""}`}
-                  onClick={column.sortValue ? () => toggleSort(column.key) : undefined}
-                >
-                  {column.header}
-                  {sortKey === column.key ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                <th key={column.key} className={`whitespace-nowrap px-4 py-3 font-semibold ${column.align === "right" ? "text-right" : ""} ${column.sortValue ? "cursor-pointer select-none hover:text-ink" : ""}`} onClick={column.sortValue ? () => toggleSort(column.key) : undefined}>
+                  {column.header}{sortKey === column.key ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {slice.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-10 text-center text-muted">
-                  {empty}
-                </td>
+            {slice.length === 0 ? <tr><td colSpan={columns.length} className="px-4 py-10 text-center text-muted">{empty}</td></tr> : slice.map((row, index) => (
+              <tr key={rowKey(row, index)} onClick={onRowClick ? () => onRowClick(row) : undefined} className={`border-t border-line/80 ${onRowClick ? "cursor-pointer hover:bg-panel-2/80" : "hover:bg-panel-2/40"}`}>
+                {columns.map((column) => <td key={column.key} className={`px-4 py-3 align-top ${column.align === "right" ? "text-right font-mono" : ""} ${column.className ?? ""}`}>{column.render(row)}</td>)}
               </tr>
-            ) : (
-              slice.map((row, index) => (
-                <tr
-                  key={rowKey(row, index)}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={`border-t border-line/80 ${onRowClick ? "cursor-pointer hover:bg-panel-2/80" : "hover:bg-panel-2/40"}`}
-                >
-                  {columns.map((column) => (
-                    <td
-                      key={column.key}
-                      className={`px-4 py-3 align-top ${column.align === "right" ? "text-right font-mono" : ""} ${column.className ?? ""}`}
-                    >
-                      {column.render(row)}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
-      <footer className="flex items-center justify-between border-t border-line px-4 py-3 text-xs text-muted">
-        <span>
-          {sorted.length.toLocaleString("pt-BR")} registros
-          {sorted.length ? ` · página ${currentPage + 1} de ${pageCount}` : ""}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="rounded-lg border border-line p-1 hover:bg-panel-2 disabled:opacity-30"
-            disabled={currentPage <= 0}
-            onClick={() => setPage((value) => Math.max(0, value - 1))}
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-line p-1 hover:bg-panel-2 disabled:opacity-30"
-            disabled={currentPage >= pageCount - 1}
-            onClick={() => setPage((value) => value + 1)}
-          >
-            <ChevronRight className="size-4" />
-          </button>
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-xs text-muted">
+        <span>{sorted.length.toLocaleString("pt-BR")} registros{sorted.length ? ` · página ${currentPage + 1} de ${pageCount}` : ""}</span>
+        <div className="flex items-center gap-3">
+          {pageSizeOptions?.length ? <label className="flex items-center gap-2">Itens por página<select value={currentPageSize} onChange={(event) => { setCurrentPageSize(Number(event.target.value)); setPage(0); }} className="rounded-lg border border-line bg-panel px-2 py-1 text-xs text-ink">{pageSizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}</select></label> : null}
+          <div className="flex items-center gap-2">
+            <button type="button" className="rounded-lg border border-line p-1 hover:bg-panel-2 disabled:opacity-30" disabled={currentPage <= 0} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft className="size-4" /></button>
+            <button type="button" className="rounded-lg border border-line p-1 hover:bg-panel-2 disabled:opacity-30" disabled={currentPage >= pageCount - 1} onClick={() => setPage((value) => value + 1)}><ChevronRight className="size-4" /></button>
+          </div>
         </div>
       </footer>
     </div>
