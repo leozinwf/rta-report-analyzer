@@ -20,6 +20,21 @@ function robotAliases(robot: string) {
   return [...aliases];
 }
 
+function robotIdentitySignal(robot:string, raw:string) {
+  const text=normalize(raw), compactText=compact(raw);
+  if(robotAliases(robot).some(alias=>compactText.includes(alias))) return {hit:true,strong:true,reason:`robô/Type: ${robot}`};
+  const ignored=new Set(["certidao","negativa","debitos","tributarios","tributaria","estado","municipio","municipal","estadual","divida","ativa","automation","rta","aut"]);
+  const robotTokens=[...new Set(normalize(robot).split(" ").filter(x=>x.length>=3&&!ignored.has(x)))];
+  const hits=robotTokens.filter(token=>text.split(" ").includes(token));
+  // Nomes de cards costumam ser abreviados. Ex.: "Certidão Negativa de Débitos Tributários da Dívida Ativa do estado de SP"
+  // pode aparecer no Jira como "Certidão Dívida Ativa SP". Para esse caso preservamos termos estruturais e UF.
+  const structural=["divida","ativa"].filter(token=>normalize(robot).split(" ").includes(token)&&text.split(" ").includes(token));
+  const uf=(normalize(robot).match(/(?:^| )(sp|rj|mg|es|pr|sc|rs|ba|go|mt|ms|df|ce|rn|pb|pe|al|se|pi|ma|pa|am|rr|ro|ac|ap|to)(?: |$)/)?.[1]);
+  const ufHit=Boolean(uf&&text.split(" ").includes(uf));
+  const strong=(hits.length>=2)||(structural.length>=2&&ufHit);
+  return {hit:strong,strong,reason:strong?`mesmo robô/escopo por nome abreviado${ufHit?` + UF ${uf!.toUpperCase()}`:""}`:""};
+}
+
 function messageSignal(message: string, text: string, compactText: string) {
   const ignored=new Set(["ocorreu","executar","execucao","instrucao","passo","erro","exception","problema","suporte","certidao","emissao","tente","novamente"]);
   const tokens = [...new Set(terms(message))].filter((x)=>!ignored.has(x));
@@ -32,8 +47,6 @@ function messageSignal(message: string, text: string, compactText: string) {
 function supplierScopeSignal(raw: string, supplierName: string) {
   const text=normalize(raw), supplier=normalize(supplierName);
   if(!supplier || !text.includes(supplier)) return false;
-  // Cards como "Migração fornecedor GPI" são deliberadamente do fornecedor/template inteiro,
-  // portanto podem cobrir vários Types mesmo sem listar cada código individualmente.
   return /fornecedor|template|migracao|migra|todos|geral|base/.test(text);
 }
 
@@ -42,9 +55,8 @@ export function findJiraMatchesForRobot(problem: ErrorAnalysis, robot: string, i
   return issues.map((issue) => {
     const raw=`${issue.summary} ${issue.description}`, text=normalize(raw), compactText=compact(raw);
     let score=0; const reasons:string[]=[];
-    const matchedAlias=robotAliases(robot).find(alias=>compactText.includes(alias));
-    const robotHit=Boolean(matchedAlias);
-    if(robotHit){score+=60;reasons.push(`robô/Type: ${robot}`);}
+    const robotSignal=robotIdentitySignal(robot,raw),robotHit=robotSignal.hit;
+    if(robotHit){score+=60;reasons.push(robotSignal.reason);}
 
     const supplierScoped=Boolean(supplier && supplierScopeSignal(raw,supplier.supplier));
     if(supplierScoped){score+=55;reasons.push(`card do fornecedor/template: ${supplier!.supplier}`);}
@@ -58,9 +70,9 @@ export function findJiraMatchesForRobot(problem: ErrorAnalysis, robot: string, i
     if(supplier&&text.includes(normalize(supplier.supplier))&&!supplierScoped){score+=5;reasons.push(`fornecedor: ${supplier.supplier}`);}
     if(!robotHit&&!supplierScoped)return null;
 
-    // Um card explicitamente escopado ao fornecedor/template é evidência forte de cobertura compartilhada.
-    // Menção casual ao fornecedor continua insuficiente; supplierScoped exige termos de escopo como fornecedor/migração/template.
-    const confidence:JiraMatch["confidence"]=(strongMessage || supplierScoped)?"Alta":"Média";
+    // Um Jira aberto do mesmo robô/Type também evita card duplicado quando a mensagem atual é outra etapa do mesmo fluxo.
+    // O nome pode estar abreviado no Jira, então a identidade considera termos distintivos/UF além do nome literal.
+    const confidence:JiraMatch["confidence"]=(robotSignal.strong || strongMessage || supplierScoped)?"Alta":"Média";
     return {issue,confidence,score,reasons,closed:isClosed(issue.status)};
   }).filter((x):x is JiraMatch=>Boolean(x)).sort((a,b)=>b.score-a.score||b.issue.updated.localeCompare(a.issue.updated)).slice(0,5);
 }
