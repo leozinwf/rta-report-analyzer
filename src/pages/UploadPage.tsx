@@ -7,7 +7,7 @@ import { formatNumber } from "../utils/format";
 
 const DB_NAME = "rta-report-analyzer-cache";
 const STORE_NAME = "excel-files";
-const MAX_FILES = 5;
+const MAX_FILES = 20;
 
 type CachedFile = { id: string; name: string; size: number; savedAt: number };
 
@@ -33,19 +33,18 @@ async function listCachedFiles(): Promise<CachedFile[]> {
 
 async function cacheFiles(files: File[]) {
   const db = await openDb();
-  const current = await listCachedFiles();
-  const byId = new Map(current.map((item) => [item.id, item]));
   for (const file of files) {
     const id = `${file.name}:${file.size}:${file.lastModified}`;
-    byId.set(id, { id, name: file.name, size: file.size, savedAt: Date.now() });
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put({ id, name: file.name, size: file.size, savedAt: Date.now(), blob: file });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put({ id, name: file.name, size: file.size, savedAt: Date.now(), blob: file });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
   }
   const all = await listCachedFiles();
-  for (const item of all.slice(MAX_FILES)) {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(item.id);
-  }
+  for (const item of all.slice(MAX_FILES)) await deleteCachedFile(item.id);
 }
 
 async function getCachedFile(id: string): Promise<File | null> {
@@ -85,14 +84,13 @@ export function UploadPage() {
   const onFiles = useCallback(async (files: FileList | File[]) => {
     const selected = Array.from(files).filter((file) => /\.(xlsx|xls)$/i.test(file.name)).slice(0, MAX_FILES);
     if (!selected.length) return;
-    await cacheFiles(selected);
-    await refreshCache();
+    try { await cacheFiles(selected); await refreshCache(); } catch { /* cache is optional; analysis must continue */ }
     await loadFiles(selected);
   }, [loadFiles, refreshCache]);
 
   async function reuseCached() {
     const files = (await Promise.all(selectedCached.map(getCachedFile))).filter(Boolean) as File[];
-    if (files.length) await loadFiles(files);
+    if (files.length) await loadFiles(files.slice(0, MAX_FILES));
   }
 
   async function analyze() {
@@ -105,7 +103,7 @@ export function UploadPage() {
       <div className="text-center">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">Ferramenta interna de operação</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight">RTA Report Analyzer</h1>
-        <p className="mx-auto mt-2 max-w-2xl text-sm text-muted">Envie Automation, CRT Geral ou os dois juntos. Os últimos 5 arquivos ficam salvos temporariamente neste navegador para reutilização.</p>
+        <p className="mx-auto mt-2 max-w-2xl text-sm text-muted">Envie Automation, CRT Geral ou os dois juntos. Os últimos {MAX_FILES} arquivos ficam salvos temporariamente neste navegador para reutilização.</p>
       </div>
 
       <div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); void onFiles(e.dataTransfer.files); }} className={`mt-6 rounded-3xl border-2 border-dashed p-7 text-center transition ${dragOver ? "border-accent bg-accent/10" : "border-line bg-panel/80"}`}>
@@ -115,13 +113,13 @@ export function UploadPage() {
           <Upload className="size-4" /> Selecionar arquivos
           <input type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => { if (e.target.files) void onFiles(e.target.files); e.target.value = ""; }} />
         </label>
-        <p className="mt-3 text-xs text-muted">Até 5 arquivos · .xlsx ou .xls · armazenamento local no navegador</p>
+        <p className="mt-3 text-xs text-muted">Até {MAX_FILES} arquivos · .xlsx ou .xls · armazenamento local no navegador</p>
       </div>
 
       {cachedFiles.length ? (
         <section className="mt-5 rounded-2xl border border-line bg-panel p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2"><Database className="size-4 text-accent" /><p className="text-sm font-semibold">Arquivos recentes ({cachedFiles.length}/5)</p></div>
+            <div className="flex items-center gap-2"><Database className="size-4 text-accent" /><p className="text-sm font-semibold">Arquivos recentes ({cachedFiles.length}/{MAX_FILES})</p></div>
             <button disabled={!selectedCached.length} onClick={() => void reuseCached()} className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Reutilizar selecionados</button>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
