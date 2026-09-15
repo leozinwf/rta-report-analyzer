@@ -7,7 +7,14 @@ import { loadJiraIssues, type JiraIssue } from "../../services/jira/storage";
 export function ChatGptExport() {
   const { filteredAnalysis, filteredExecutions } = useReport();
   const [copied,setCopied]=useState(false); const [preview,setPreview]=useState(false); const [jiraIssues,setJiraIssues]=useState<JiraIssue[]>([]);
-  useEffect(()=>{ void loadJiraIssues().then(setJiraIssues).catch(()=>setJiraIssues([])); },[filteredAnalysis]);
+  useEffect(()=>{
+    let active=true;
+    const refresh=()=>{void loadJiraIssues().then(items=>{if(active)setJiraIssues(items);}).catch(()=>{if(active)setJiraIssues([]);});};
+    refresh();
+    window.addEventListener("jira-issues-updated",refresh);
+    window.addEventListener("focus",refresh);
+    return()=>{active=false;window.removeEventListener("jira-issues-updated",refresh);window.removeEventListener("focus",refresh);};
+  },[filteredAnalysis]);
   const text=useMemo(()=>filteredAnalysis?buildChatGptPackage(filteredAnalysis,filteredExecutions,jiraIssues):"",[filteredAnalysis,filteredExecutions,jiraIssues]);
   if(!filteredAnalysis)return null;
   async function copyPackage(){await navigator.clipboard.writeText(text);setCopied(true);window.setTimeout(()=>setCopied(false),2500);}
