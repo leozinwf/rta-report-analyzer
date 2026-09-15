@@ -3,9 +3,17 @@ import { rate } from "../../utils/format";
 import { severityWeight } from "./classifier";
 
 function healthStatus(robot: Pick<RobotAnalysis, "successRate" | "errorRate" | "problemScore">): RobotHealthStatus {
-  if (robot.problemScore >= 55 || robot.errorRate >= 0.45) return "critical";
-  if (robot.problemScore >= 28 || robot.errorRate >= 0.2 || robot.successRate < 0.5) return "watch";
+  if (robot.problemScore >= 65 || (robot.errorRate >= 0.45 && robot.total >= 20)) return "critical";
+  if (robot.problemScore >= 35 || (robot.errorRate >= 0.2 && robot.total >= 10) || (robot.successRate < 0.5 && robot.total >= 10)) return "watch";
   return "healthy";
+}
+
+function volumeEvidence(errorCount: number, total: number): number {
+  if (!errorCount || !total) return 0;
+  // Logarithmic error volume prevents 2/2 or 7/7 from competing with hundreds/thousands of failures.
+  const errorVolume = Math.min(1, Math.log1p(errorCount) / Math.log1p(500));
+  const sampleConfidence = Math.min(1, total / 50);
+  return errorVolume * 30 + sampleConfidence * 15;
 }
 
 export function analyzeRobots(executions: ClassifiedExecution[]): RobotAnalysis[] {
@@ -33,35 +41,18 @@ export function analyzeRobots(executions: ClassifiedExecution[]): RobotAnalysis[
 
     for (const row of rows) {
       statusDistribution[row.status] = (statusDistribution[row.status] ?? 0) + 1;
-      if (row.environment) {
-        environments[row.environment] = (environments[row.environment] ?? 0) + 1;
-      }
+      if (row.environment) environments[row.environment] = (environments[row.environment] ?? 0) + 1;
       switch (row.canonicalStatus) {
-        case "success":
-          successCount += 1;
-          break;
-        case "error":
-          errorCount += 1;
-          break;
-        case "instability":
-          instabilityCount += 1;
-          break;
-        case "warning":
-          warningCount += 1;
-          break;
-        case "no_result":
-          noResultCount += 1;
-          break;
-        default:
-          break;
+        case "success": successCount += 1; break;
+        case "error": errorCount += 1; break;
+        case "instability": instabilityCount += 1; break;
+        case "warning": warningCount += 1; break;
+        case "no_result": noResultCount += 1; break;
+        default: break;
       }
       if (row.canonicalStatus !== "success") {
         severitySum += severityWeight(row.severity);
-        const current = problems.get(row.message) ?? {
-          count: 0,
-          severity: row.severity,
-          category: row.category,
-        };
+        const current = problems.get(row.message) ?? { count: 0, severity: row.severity, category: row.category };
         current.count += 1;
         problems.set(row.message, current);
       }
@@ -70,55 +61,31 @@ export function analyzeRobots(executions: ClassifiedExecution[]): RobotAnalysis[
 
     const successRate = rate(successCount, total);
     const errorRate = rate(errorCount, total);
-    const frequency = rate(total, executions.length);
     const avgSeverity = total ? severitySum / total : 0;
     const recurrence = rate(retryFail, total);
-    const problemScore = Math.round(
-      Math.min(
-        100,
-        errorRate * 35 +
-          rate(instabilityCount, total) * 20 +
-          Math.min(1, frequency * 12) * 15 +
-          avgSeverity * 20 +
-          recurrence * 10,
-      ) * 10,
-    ) / 10;
+    const problemScore = Math.round(Math.min(100,
+      errorRate * 30 +
+      volumeEvidence(errorCount, total) +
+      rate(instabilityCount, total) * 8 +
+      avgSeverity * 12 +
+      recurrence * 5,
+    ) * 10) / 10;
 
     const topProblems = [...problems.entries()]
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 8)
-      .map(([message, info]) => ({
-        message: message || "N/D",
-        count: info.count,
-        severity: info.severity,
-        category: info.category,
-      }));
+      .map(([message, info]) => ({ message: message || "N/D", count: info.count, severity: info.severity, category: info.category }));
 
     const analysis: RobotAnalysis = {
-      id,
-      robot: rows[0]?.robot ?? "N/D",
-      robotId: rows[0]?.robotId,
-      total,
-      successCount,
-      errorCount,
-      instabilityCount,
-      warningCount,
-      noResultCount,
+      id, robot: rows[0]?.robot ?? "N/D", robotId: rows[0]?.robotId, total,
+      successCount, errorCount, instabilityCount, warningCount, noResultCount,
       otherCount: total - successCount - errorCount - instabilityCount - warningCount - noResultCount,
-      successRate,
-      errorRate,
-      instabilityRate: rate(instabilityCount, total),
-      warningRate: rate(warningCount, total),
-      noResultRate: rate(noResultCount, total),
-      problemScore,
-      status: "unknown",
-      topProblems,
-      statusDistribution,
-      environments,
+      successRate, errorRate, instabilityRate: rate(instabilityCount, total), warningRate: rate(warningCount, total), noResultRate: rate(noResultCount, total),
+      problemScore, status: "unknown", topProblems, statusDistribution, environments,
     };
     analysis.status = healthStatus(analysis);
     robots.push(analysis);
   }
 
-  return robots.sort((a, b) => b.problemScore - a.problemScore || b.total - a.total);
+  return robots.sort((a, b) => b.problemScore - a.problemScore || b.errorCount - a.errorCount || b.total - a.total);
 }
