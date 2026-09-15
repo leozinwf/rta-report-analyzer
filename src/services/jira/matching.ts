@@ -15,9 +15,7 @@ function robotAliases(robot: string) {
   const aliases = new Set<string>();
   const add = (value: string) => { const c=compact(value); if(c.length>=5) aliases.add(c); };
   add(robot);
-  // O relatório pode trazer o estado no final, ex.: "... Espírito Santo (ES)", enquanto o Jira usa só o nome.
   add(robot.replace(/\s*\([A-Z]{2}\)\s*$/i, ""));
-  // Também aceita um sufixo UF separado por hífen apenas no final do nome descritivo.
   add(robot.replace(/\s*[-–—]\s*[A-Z]{2}\s*$/i, ""));
   return [...aliases];
 }
@@ -31,6 +29,14 @@ function messageSignal(message: string, text: string, compactText: string) {
   return { hits, ratio: tokens.length ? hits.length/tokens.length : 0, exactPhrase };
 }
 
+function supplierScopeSignal(raw: string, supplierName: string) {
+  const text=normalize(raw), supplier=normalize(supplierName);
+  if(!supplier || !text.includes(supplier)) return false;
+  // Cards como "Migração fornecedor GPI" são deliberadamente do fornecedor/template inteiro,
+  // portanto podem cobrir vários Types mesmo sem listar cada código individualmente.
+  return /fornecedor|template|migracao|migra|todos|geral|base/.test(text);
+}
+
 export function findJiraMatchesForRobot(problem: ErrorAnalysis, robot: string, issues: JiraIssue[]): JiraMatch[] {
   const supplier=getSupplierForType(robot);
   return issues.map((issue) => {
@@ -40,18 +46,21 @@ export function findJiraMatchesForRobot(problem: ErrorAnalysis, robot: string, i
     const robotHit=Boolean(matchedAlias);
     if(robotHit){score+=60;reasons.push(`robô/Type: ${robot}`);}
 
+    const supplierScoped=Boolean(supplier && supplierScopeSignal(raw,supplier.supplier));
+    if(supplierScoped){score+=55;reasons.push(`card do fornecedor/template: ${supplier!.supplier}`);}
+
     const signal=messageSignal(problem.message,text,compactText);
     const strongMessage=signal.exactPhrase || (signal.ratio>=.6 && signal.hits.length>=1);
     if(signal.exactPhrase){score+=35;reasons.push("mensagem exata");}
     else if(strongMessage){score+=30;reasons.push(`mensagem/etapa: ${signal.hits.slice(0,4).join(", ")}`);}
     else if(signal.hits.length){score+=10;reasons.push(`termo relacionado: ${signal.hits.slice(0,3).join(", ")}`);}
 
-    if(supplier&&text.includes(normalize(supplier.supplier))){score+=5;reasons.push(`fornecedor: ${supplier.supplier}`);}
-    // Sem o mesmo robô/Type, o Jira nunca cobre o problema atual.
-    if(!robotHit)return null;
-    // Correspondência ALTA exige evidência forte do problema além do Type. Isso evita que Type igual + palavras genéricas
-    // ("problema", "suporte", "certidão" etc.) transformem cards de outra causa em cobertura/regressão falsa.
-    const confidence:JiraMatch["confidence"]=strongMessage?"Alta":"Média";
+    if(supplier&&text.includes(normalize(supplier.supplier))&&!supplierScoped){score+=5;reasons.push(`fornecedor: ${supplier.supplier}`);}
+    if(!robotHit&&!supplierScoped)return null;
+
+    // Um card explicitamente escopado ao fornecedor/template é evidência forte de cobertura compartilhada.
+    // Menção casual ao fornecedor continua insuficiente; supplierScoped exige termos de escopo como fornecedor/migração/template.
+    const confidence:JiraMatch["confidence"]=(strongMessage || supplierScoped)?"Alta":"Média";
     return {issue,confidence,score,reasons,closed:isClosed(issue.status)};
   }).filter((x):x is JiraMatch=>Boolean(x)).sort((a,b)=>b.score-a.score||b.issue.updated.localeCompare(a.issue.updated)).slice(0,5);
 }
