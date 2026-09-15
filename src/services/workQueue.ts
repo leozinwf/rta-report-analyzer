@@ -11,11 +11,15 @@ function priority(robotTotal:number,robotErrors:number,messageCount:number):Work
   if((robotErrors>=20&&rate>=.5)||(robotErrors>=10&&rate>=.8&&concentration>=.5))return "P1";
   return "P2";
 }
-function decision(problem:ErrorAnalysis,matches:JiraMatch[],robotTotal:number,robotErrors:number):WorkDecision {
+function decision(problem:ErrorAnalysis,matches:JiraMatch[],robotTotal:number,robotErrors:number,robotSuccesses:number):WorkDecision {
   const high=matches.find(m=>m.confidence==="Alta");
   if(high)return high.closed?"regression":"existing";
   if(matches.some(m=>m.confidence==="Média"))return "verify";
-  const rate=robotTotal?robotErrors/robotTotal:0;
+  const rate=robotTotal?robotErrors/robotTotal:0, successRate=robotTotal?robotSuccesses/robotTotal:0;
+  const intermittentSignal=/site\s*instavel|siteinstavelexception|timeout|temporariamente|bloquead/i.test(problem.message);
+  if(problem.eventType==="instability")return "monitor";
+  // A technical-looking exception with a healthy majority of successes is evidence to verify first, not enough to auto-open.
+  if(intermittentSignal&&successRate>=.5)return "verify";
   if(problem.eventType==="technical_error"&&robotErrors>=3&&(robotErrors>=10||rate>=.5))return "open";
   return "monitor";
 }
@@ -26,7 +30,7 @@ export function buildWorkQueue(analysis:DashboardAnalysis,executions:ClassifiedE
     if(!rows.length)return;
     const robotErrors=robotRows.filter(r=>r.canonicalStatus==="error").length, robotSuccesses=robotRows.filter(r=>r.canonicalStatus==="success").length;
     const errors=rows.filter(r=>r.canonicalStatus==="error").length, matches=findJiraMatchesForRobot(problem,robot,jira);
-    items.push({id:`${problem.id}::${robot}`,problem,decision:decision(problem,matches,robotRows.length,robotErrors),priority:priority(robotRows.length,robotErrors,rows.length),matches,total:rows.length,errors,robots:[robot],tokens:rows.slice(0,5).map(r=>r.id),robotTotal:robotRows.length,robotErrors,robotSuccesses});
+    items.push({id:`${problem.id}::${robot}`,problem,decision:decision(problem,matches,robotRows.length,robotErrors,robotSuccesses),priority:priority(robotRows.length,robotErrors,rows.length),matches,total:rows.length,errors,robots:[robot],tokens:rows.slice(0,5).map(r=>r.id),robotTotal:robotRows.length,robotErrors,robotSuccesses});
   }));
   return items.sort((a,b)=>{const d={open:0,regression:1,existing:2,verify:3,monitor:4},p={P0:0,P1:1,P2:2};return d[a.decision]-d[b.decision]||p[a.priority]-p[b.priority]||b.robotErrors-a.robotErrors||b.total-a.total;});
 }
