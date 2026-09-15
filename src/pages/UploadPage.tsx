@@ -5,7 +5,7 @@ import { ProgressBar, progressLabel } from "../components/common/ProgressBar";
 import { useReport } from "../context/ReportContext";
 import { formatNumber } from "../utils/format";
 
-export const APP_VERSION = "1.8.0";
+export const APP_VERSION = "1.9.0";
 const DB_NAME = "rta-report-analyzer-cache";
 const STORE_NAME = "excel-files";
 const MAX_FILES = 20;
@@ -27,7 +27,7 @@ function FeatureGuide({onClose}:{onClose:()=>void}){return <div className="fixed
 ["5. Arquivos sobrepostos","Ao analisar vários relatórios, execuções repetidas são deduplicadas pelo Token. Isso evita somar duas vezes a mesma execução quando relatórios de períodos diferentes possuem uma janela de tempo sobreposta."],
 ["6. Fornecedor / template","Types conhecidos podem ser associados ao fornecedor/template compartilhado. Problemas com a mesma mensagem/etapa e o mesmo fornecedor podem ser avaliados em conjunto para evitar abrir vários cards para uma única implementação base."],
 ["7. Comparação com Jira","A Fila de Trabalho cruza cada problema com os cards Jira sincronizados. O matching considera Robô/Type, variações e abreviações do nome, mensagem/etapa, fornecedor/template e cards explicitamente gerais de fornecedor. Correspondências altas abertas aparecem como Já possui card; cards concluídos com erro atual podem indicar regressão."],
-["8. Fila de Trabalho","Organiza problemas em Precisa de card, Já possui card, Possível regressão, Verificar e Monitorar. Também sugere prioridade P0/P1/P2 usando volume, taxa de erro e concentração. O botão Copiar card gera título, evidências e tokens para colar no Jira."],
+["8. Fila de Trabalho","Organiza problemas em Precisa de card, Já possui card, Possível regressão, Verificar e Monitorar. Também sugere prioridade P0/P1/P2 usando volume, taxa de erro e concentração. É possível pré-visualizar o card, consultar evidências e copiar tokens individualmente para análise manual antes de copiar o card completo."],
 ["9. Regras especiais","A mensagem ‘Há cenários não mapeados’ é candidata obrigatória a card, salvo Jira válido já existente. Mensagens que falam em erro/indisponibilidade do site também são tratadas como erro quando o Status real da execução é ERRO; nesse caso o status prevalece sobre a interpretação de instabilidade externa."],
 ["10. Migração RTA → Automation","A direção esperada é RTA → Automation. Uma sequência R e depois A é migração normal. Há uma tolerância de 60 minutos após o primeiro Automation para transição/fila; tokens R reaparecendo depois dessa janela são marcados como migração inconsistente."],
 ["11. Filtros e exploração","Filtros globais permitem combinar período, sistema, múltiplos robôs, status, categoria, severidade, ambiente, tenant, tentativa e tipo. Robô possui pesquisa por texto. As tabelas permitem paginação de 25, 50, 100 ou todos os registros."],
