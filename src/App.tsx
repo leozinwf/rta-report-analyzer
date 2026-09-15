@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, type ReactNode } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { useReport } from "./context/ReportContext";
 import { AttemptsPage } from "./pages/AttemptsPage";
@@ -18,29 +18,40 @@ function RequireReport({ children }: { children: ReactNode }) {
   return children;
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<UploadPage />} />
-      <Route
-        element={
-          <RequireReport>
-            <AppShell />
-          </RequireReport>
-        }
-      >
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/execucoes" element={<ExecutionsPage />} />
-        <Route path="/robos" element={<RobotsPage />} />
-        <Route path="/robos/:robotId" element={<RobotDetailPage />} />
-        <Route path="/problemas" element={<ProblemsPage />} />
-        <Route path="/etapas" element={<StagesPage />} />
-        <Route path="/tentativas" element={<AttemptsPage />} />
-        <Route path="/ambientes" element={<EnvironmentsPage />} />
-        <Route path="/tenants" element={<TenantsPage />} />
-        <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/" element={<UploadPage />} />
+        <Route
+          element={
+            <RequireReport>
+              <AppShell />
+            </RequireReport>
+          }
+        >
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/execucoes" element={<ExecutionsPage />} />
+          <Route path="/robos" element={<RobotsPage />} />
+          <Route path="/robos/:robotId" element={<RobotDetailPage />} />
+          <Route path="/problemas" element={<ProblemsPage />} />
+          <Route path="/etapas" element={<StagesPage />} />
+          <Route path="/tentativas" element={<AttemptsPage />} />
+          <Route path="/ambientes" element={<EnvironmentsPage />} />
+          <Route path="/tenants" element={<TenantsPage />} />
+          <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
