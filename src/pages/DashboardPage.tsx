@@ -14,11 +14,12 @@ import {
 } from "recharts";
 import { CATEGORY_LABELS, EVENT_TYPE_LABELS } from "../data/labels";
 import { useReport } from "../context/ReportContext";
-import type { ErrorAnalysis } from "../types";
+import type { Anomaly, DashboardAnalysis, ErrorAnalysis } from "../types";
 import { formatNumber, formatPercent } from "../utils/format";
 import { CHART_AXIS, CHART_COLORS, CHART_TOOLTIP } from "../utils/chartTheme";
 import { CategoryBadge, EventTypeBadge, SeverityBadge } from "../components/common/Badge";
 import { EmptyState } from "../components/common/EmptyState";
+import { Modal } from "../components/common/Modal";
 import { RobotNameCell } from "../components/common/RobotNameCell";
 import { SectionHeader } from "../components/common/SectionHeader";
 import { StatCard } from "../components/common/StatCard";
@@ -33,9 +34,18 @@ const PIE_COLORS = [
   "#475569",
 ];
 
+const ANOMALY_TYPE_LABELS: Record<Anomaly["type"], string> = {
+  robot_failure_rate: "Taxa de falha do robô",
+  error_concentration: "Concentração de erros",
+  environment_concentration: "Concentração por ambiente",
+  retry_persistence: "Persistência após retry",
+  volume_spike: "Pico de volume",
+};
+
 export function DashboardPage() {
   const { filteredAnalysis } = useReport();
   const [problem, setProblem] = useState<ErrorAnalysis | null>(null);
+  const [anomaly, setAnomaly] = useState<Anomaly | null>(null);
   const [sort, setSort] = useState<"count" | "percent" | "robots" | "severity">("count");
   const analysis = filteredAnalysis;
 
@@ -56,7 +66,7 @@ export function DashboardPage() {
       { name: "Sucesso", value: analysis.metrics.successCount },
       { name: "Erro", value: analysis.metrics.errorCount },
       { name: "Site instável", value: analysis.metrics.instabilityCount },
-      { name: "Sem resultados", value: analysis.metrics.noResultCount },
+      { name: "Sem resultados", value: analysis.metrics.noResultRate },
       { name: "Aviso", value: analysis.metrics.warningCount },
     ].filter((item) => item.value > 0);
   }, [analysis]);
@@ -166,10 +176,21 @@ export function DashboardPage() {
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <SectionHeader title="Anomalias detectadas" description="Regras estatísticas simples sobre este relatório. Sem histórico externo." />
           <ul className="space-y-3">
-            {analysis.anomalies.map((anomaly) => (
-              <li key={anomaly.id} className="rounded-xl border border-line bg-panel px-4 py-3">
-                <p className="text-sm font-semibold text-amber-800">⚠ {anomaly.title}</p>
-                <p className="mt-1 text-sm text-slate-600">{anomaly.description}</p>
+            {analysis.anomalies.map((item) => (
+              <li key={item.id} className="rounded-xl border border-line bg-panel px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-amber-800">⚠ {item.title}</p>
+                    <p className="mt-1 text-sm text-slate-600">{item.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAnomaly(item)}
+                    className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+                  >
+                    Ver detalhes
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -248,6 +269,106 @@ export function DashboardPage() {
       </section>
 
       <ProblemDetail problem={problem} onClose={() => setProblem(null)} />
+      <AnomalyDetail anomaly={anomaly} analysis={analysis} onClose={() => setAnomaly(null)} />
+    </div>
+  );
+}
+
+function AnomalyDetail({ anomaly, analysis, onClose }: { anomaly: Anomaly | null; analysis: DashboardAnalysis; onClose: () => void }) {
+  if (!anomaly) return null;
+
+  const robot = anomaly.entity ? analysis.robots.find((item) => item.robot === anomaly.entity) : undefined;
+  const environment = anomaly.entity ? analysis.environments.find((item) => item.environment === anomaly.entity) : undefined;
+  const problem = anomaly.entity ? analysis.problems.find((item) => item.message === anomaly.entity) : undefined;
+
+  return (
+    <Modal open title={anomaly.title} onClose={onClose} wide>
+      <div className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <DetailInfo label="Tipo" value={ANOMALY_TYPE_LABELS[anomaly.type]} />
+          <DetailInfo label="Severidade" value={anomaly.severity.toUpperCase()} />
+          <DetailInfo label="Entidade" value={anomaly.entity || "Relatório geral"} />
+        </div>
+
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Por que foi sinalizada</p>
+          <p className="mt-2 text-sm leading-relaxed text-slate-700">{anomaly.description}</p>
+        </div>
+
+        {robot ? (
+          <div>
+            <h3 className="mb-3 text-sm font-semibold">Dados do robô relacionado</h3>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <DetailInfo label="Execuções" value={formatNumber(robot.total)} />
+              <DetailInfo label="Sucessos" value={formatNumber(robot.successCount)} />
+              <DetailInfo label="Erros" value={formatNumber(robot.errorCount)} />
+              <DetailInfo label="Taxa de falha" value={formatPercent(robot.errorRate)} />
+            </div>
+            {robot.topProblems.length ? (
+              <div className="mt-4 rounded-xl border border-line p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Principais problemas</p>
+                <ol className="mt-2 space-y-2 text-sm">
+                  {robot.topProblems.slice(0, 5).map((item, index) => (
+                    <li key={item.message} className="flex justify-between gap-4">
+                      <span>{index + 1}. {item.message || "N/D"}</span>
+                      <span className="font-mono text-muted">{formatNumber(item.count)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+            <Link
+              to={`/robos/${encodeURIComponent(robot.id)}`}
+              className="mt-4 inline-flex rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
+            >
+              Abrir detalhes do robô
+            </Link>
+          </div>
+        ) : null}
+
+        {environment ? (
+          <div>
+            <h3 className="mb-3 text-sm font-semibold">Dados do ambiente relacionado</h3>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <DetailInfo label="Execuções" value={formatNumber(environment.total)} />
+              <DetailInfo label="Sucessos" value={formatNumber(environment.successCount)} />
+              <DetailInfo label="Erros" value={formatNumber(environment.errorCount)} />
+              <DetailInfo label="Taxa de falha" value={formatPercent(environment.errorRate)} />
+            </div>
+          </div>
+        ) : null}
+
+        {problem ? (
+          <div>
+            <h3 className="mb-3 text-sm font-semibold">Dados do erro relacionado</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <DetailInfo label="Ocorrências" value={formatNumber(problem.count)} />
+              <DetailInfo label="Robôs afetados" value={formatNumber(problem.robotCount)} />
+              <DetailInfo label="Percentual" value={formatPercent(problem.percent)} />
+            </div>
+          </div>
+        ) : null}
+
+        {anomaly.type === "retry_persistence" ? (
+          <div>
+            <h3 className="mb-3 text-sm font-semibold">Retries</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <DetailInfo label="Precisaram retry" value={formatNumber(analysis.retries.neededRetry)} />
+              <DetailInfo label="Recuperados" value={formatNumber(analysis.retries.recovered)} />
+              <DetailInfo label="Ainda falhando" value={formatNumber(analysis.retries.stillFailing)} />
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}
+
+function DetailInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-panel-2 px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.14em] text-muted">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
     </div>
   );
 }

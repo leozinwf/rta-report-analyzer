@@ -1,5 +1,5 @@
 import { canonicalStatusFromLabel } from "../../data/statusMap";
-import type { Execution } from "../../types";
+import type { Execution, ExecutionPlatform } from "../../types";
 import { parseDate } from "../../utils/date";
 import { asString, isBlank, normalizeMessage } from "../../utils/text";
 import type { ColumnMapping } from "./columnMap";
@@ -16,6 +16,13 @@ function parseAttempt(value: unknown): number | undefined {
   return Number.isFinite(num) ? num : undefined;
 }
 
+function platformFromToken(token: string): ExecutionPlatform {
+  const normalized = token.trim().toUpperCase();
+  if (normalized.startsWith("R")) return "RTA";
+  if (normalized.startsWith("A")) return "Automation";
+  return "N/D";
+}
+
 export function normalizeRows(
   rows: Record<string, unknown>[],
   mapping: ColumnMapping,
@@ -26,14 +33,16 @@ export function normalizeRows(
     const statusValue = cell(row, mapping, "status");
     const messageValue = cell(row, mapping, "message");
     const status = asString(statusValue);
+    const id = asString(idValue) || `row-${index + 1}`;
 
     return {
-      id: asString(idValue) || `row-${index + 1}`,
+      id,
       robot: asString(robotValue) || "N/D",
       robotId: asString(cell(row, mapping, "robotId")) || undefined,
       status: status || "N/D",
       canonicalStatus: canonicalStatusFromLabel(status),
       message: normalizeMessage(asString(messageValue)),
+      platform: platformFromToken(id),
       tenant: asString(cell(row, mapping, "tenant")) || undefined,
       environment: asString(cell(row, mapping, "environment")) || undefined,
       attempt: parseAttempt(cell(row, mapping, "attempt")),

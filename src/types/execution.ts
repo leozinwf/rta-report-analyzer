@@ -28,6 +28,8 @@ export type CanonicalStatus =
   | "cancelled"
   | "unknown";
 
+export type ExecutionPlatform = "RTA" | "Automation" | "N/D";
+
 export interface Execution {
   id: string;
   robot: string;
@@ -35,6 +37,7 @@ export interface Execution {
   status: string;
   canonicalStatus: CanonicalStatus;
   message: string;
+  platform: ExecutionPlatform;
   tenant?: string;
   environment?: string;
   attempt?: number;

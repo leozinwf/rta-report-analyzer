@@ -50,6 +50,7 @@ export function detectAnomalies(
         severity: "medium",
         title: "Concentração anormal de erros",
         description: `"${truncate(message)}" representa ${pct(count / totalProblems)} dos problemas deste relatório (${count} ocorrências).`,
+        entity: message,
       });
     }
   }
