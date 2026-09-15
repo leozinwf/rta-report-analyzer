@@ -10,10 +10,25 @@ function normalize(value: string) {
 function compact(value: string) { return normalize(value).replace(/\s+/g, ""); }
 function terms(value: string) { return normalize(value).split(" ").filter((x) => x.length >= 5); }
 function isClosed(status: string) { const s=normalize(status); return /concluid|done|closed|resolvid|finaliz/.test(s); }
-function messageSignal(message: string, text: string) {
-  const tokens = [...new Set(terms(message))].filter((x)=>!["ocorreu","executar","execucao","instrucao","passo","erro","exception"].includes(x));
+
+function robotAliases(robot: string) {
+  const aliases = new Set<string>();
+  const add = (value: string) => { const c=compact(value); if(c.length>=5) aliases.add(c); };
+  add(robot);
+  // O relatório pode trazer o estado no final, ex.: "... Espírito Santo (ES)", enquanto o Jira usa só o nome.
+  add(robot.replace(/\s*\([A-Z]{2}\)\s*$/i, ""));
+  // Também aceita um sufixo UF separado por hífen apenas no final do nome descritivo.
+  add(robot.replace(/\s*[-–—]\s*[A-Z]{2}\s*$/i, ""));
+  return [...aliases];
+}
+
+function messageSignal(message: string, text: string, compactText: string) {
+  const ignored=new Set(["ocorreu","executar","execucao","instrucao","passo","erro","exception","problema","suporte","certidao","emissao","tente","novamente"]);
+  const tokens = [...new Set(terms(message))].filter((x)=>!ignored.has(x));
   const hits = tokens.filter((token)=>text.includes(token));
-  return { hits, ratio: tokens.length ? hits.length/tokens.length : 0 };
+  const normalizedMessage=compact(message);
+  const exactPhrase=normalizedMessage.length>=12 && compactText.includes(normalizedMessage);
+  return { hits, ratio: tokens.length ? hits.length/tokens.length : 0, exactPhrase };
 }
 
 export function findJiraMatchesForRobot(problem: ErrorAnalysis, robot: string, issues: JiraIssue[]): JiraMatch[] {
@@ -21,15 +36,22 @@ export function findJiraMatchesForRobot(problem: ErrorAnalysis, robot: string, i
   return issues.map((issue) => {
     const raw=`${issue.summary} ${issue.description}`, text=normalize(raw), compactText=compact(raw);
     let score=0; const reasons:string[]=[];
-    const robotHit=compactText.includes(compact(robot));
+    const matchedAlias=robotAliases(robot).find(alias=>compactText.includes(alias));
+    const robotHit=Boolean(matchedAlias);
     if(robotHit){score+=60;reasons.push(`robô/Type: ${robot}`);}
-    const signal=messageSignal(problem.message,text);
-    if(signal.ratio>=.6&&signal.hits.length){score+=30;reasons.push(`mensagem/etapa: ${signal.hits.slice(0,4).join(", ")}`);}
-    else if(signal.hits.length){score+=15;reasons.push(`termo do erro: ${signal.hits.slice(0,3).join(", ")}`);}
-    if(supplier&&text.includes(normalize(supplier.supplier))){score+=10;reasons.push(`fornecedor: ${supplier.supplier}`);}
-    // Sem o mesmo robô/Type, termos genéricos ou fornecedor não são suficientes para cobrir este item.
+
+    const signal=messageSignal(problem.message,text,compactText);
+    const strongMessage=signal.exactPhrase || (signal.ratio>=.6 && signal.hits.length>=1);
+    if(signal.exactPhrase){score+=35;reasons.push("mensagem exata");}
+    else if(strongMessage){score+=30;reasons.push(`mensagem/etapa: ${signal.hits.slice(0,4).join(", ")}`);}
+    else if(signal.hits.length){score+=10;reasons.push(`termo relacionado: ${signal.hits.slice(0,3).join(", ")}`);}
+
+    if(supplier&&text.includes(normalize(supplier.supplier))){score+=5;reasons.push(`fornecedor: ${supplier.supplier}`);}
+    // Sem o mesmo robô/Type, o Jira nunca cobre o problema atual.
     if(!robotHit)return null;
-    const confidence:JiraMatch["confidence"]=score>=75?"Alta":"Média";
+    // Correspondência ALTA exige evidência forte do problema além do Type. Isso evita que Type igual + palavras genéricas
+    // ("problema", "suporte", "certidão" etc.) transformem cards de outra causa em cobertura/regressão falsa.
+    const confidence:JiraMatch["confidence"]=strongMessage?"Alta":"Média";
     return {issue,confidence,score,reasons,closed:isClosed(issue.status)};
   }).filter((x):x is JiraMatch=>Boolean(x)).sort((a,b)=>b.score-a.score||b.issue.updated.localeCompare(a.issue.updated)).slice(0,5);
 }
