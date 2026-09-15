@@ -31,6 +31,15 @@ async function listCachedFiles(): Promise<CachedFile[]> {
   });
 }
 
+async function deleteCachedFile(id: string) {
+  const db = await openDb();
+  return new Promise<void>((resolve, reject) => {
+    const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
 async function cacheFiles(files: File[]) {
   const db = await openDb();
   for (const file of files) {
@@ -59,15 +68,6 @@ async function getCachedFile(id: string): Promise<File | null> {
   });
 }
 
-async function deleteCachedFile(id: string) {
-  const db = await openDb();
-  return new Promise<void>((resolve, reject) => {
-    const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(id);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
 export function UploadPage() {
   const { loadFiles, runAnalysis, phase, progress, parsed, loadedReports, error, warnings } = useReport();
   const [dragOver, setDragOver] = useState(false);
@@ -84,7 +84,12 @@ export function UploadPage() {
   const onFiles = useCallback(async (files: FileList | File[]) => {
     const selected = Array.from(files).filter((file) => /\.(xlsx|xls)$/i.test(file.name)).slice(0, MAX_FILES);
     if (!selected.length) return;
-    try { await cacheFiles(selected); await refreshCache(); } catch { /* cache is optional; analysis must continue */ }
+    try {
+      await cacheFiles(selected);
+      await refreshCache();
+    } catch {
+      setCachedFiles([]);
+    }
     await loadFiles(selected);
   }, [loadFiles, refreshCache]);
 
