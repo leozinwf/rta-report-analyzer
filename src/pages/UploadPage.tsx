@@ -5,7 +5,7 @@ import { ProgressBar, progressLabel } from "../components/common/ProgressBar";
 import { useReport } from "../context/ReportContext";
 import { formatNumber } from "../utils/format";
 
-export const APP_VERSION = "1.10.0";
+export const APP_VERSION = "1.10.1";
 const DB_NAME = "rta-report-analyzer-cache";
 const STORE_NAME = "excel-files";
 const MAX_FILES = 20;
