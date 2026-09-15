@@ -2,7 +2,7 @@ import type { ClassifiedExecution, RobotAnalysis, RobotHealthStatus, Severity } 
 import { rate } from "../../utils/format";
 import { severityWeight } from "./classifier";
 
-function healthStatus(robot: Pick<RobotAnalysis, "successRate" | "errorRate" | "problemScore">): RobotHealthStatus {
+function healthStatus(robot: Pick<RobotAnalysis, "successRate" | "errorRate" | "problemScore" | "total">): RobotHealthStatus {
   if (robot.problemScore >= 65 || (robot.errorRate >= 0.45 && robot.total >= 20)) return "critical";
   if (robot.problemScore >= 35 || (robot.errorRate >= 0.2 && robot.total >= 10) || (robot.successRate < 0.5 && robot.total >= 10)) return "watch";
   return "healthy";
