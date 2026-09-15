@@ -6,155 +6,50 @@ import { classifyExecution } from "../analysis/classifier";
 import { mapColumns, resolveExecutionSheet } from "./columnMap";
 import { normalizeRows } from "./normalize";
 
-export class ExcelParseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ExcelParseError";
-  }
-}
-
-export interface ParseProgress {
-  phase: "reading" | "extracting" | "normalizing" | "classifying";
-  percent: number;
-}
-
+export class ExcelParseError extends Error { constructor(message: string) { super(message); this.name = "ExcelParseError"; } }
+export interface ParseProgress { phase: "reading" | "extracting" | "normalizing" | "classifying"; percent: number; }
 export type ReportKind = "automation" | "crt" | "generic";
-
-export interface ReportDetection {
-  kind: ReportKind;
-  label: string;
-  confidence: "high" | "medium" | "low";
-  evidence: string[];
-}
+export interface ReportDetection { kind: ReportKind; label: string; confidence: "high" | "medium" | "low"; evidence: string[]; }
 
 export function detectReportType(columns: string[]): ReportDetection {
   const normalized = new Set(columns.map(normalizeKey));
   const has = (...headers: string[]) => headers.some((header) => normalized.has(normalizeKey(header)));
-
   const automationEvidence: string[] = [];
-  if (has("ID do Robô")) automationEvidence.push("ID do Robô");
-  if (has("Nome do Robô")) automationEvidence.push("Nome do Robô");
-  if (has("Tenant Alias")) automationEvidence.push("Tenant Alias");
-  if (has("Destino de Resposta")) automationEvidence.push("Destino de Resposta");
-
-  if (automationEvidence.length >= 2) {
-    return {
-      kind: "automation",
-      label: "Relatório Automation",
-      confidence: automationEvidence.length >= 3 ? "high" : "medium",
-      evidence: automationEvidence,
-    };
-  }
-
+  if (has("ID do Robô")) automationEvidence.push("ID do Robô"); if (has("Nome do Robô")) automationEvidence.push("Nome do Robô"); if (has("Tenant Alias")) automationEvidence.push("Tenant Alias"); if (has("Destino de Resposta")) automationEvidence.push("Destino de Resposta");
+  if (automationEvidence.length >= 2) return { kind:"automation",label:"Relatório Automation",confidence:automationEvidence.length>=3?"high":"medium",evidence:automationEvidence };
   const crtEvidence: string[] = [];
-  if (has("Tipo")) crtEvidence.push("Tipo");
-  if (has("Cliente")) crtEvidence.push("Cliente");
-  if (has("Data Criação")) crtEvidence.push("Data Criação");
-  if (has("Data Início de Processamento")) crtEvidence.push("Data Início de Processamento");
-
-  if (crtEvidence.length >= 2) {
-    return {
-      kind: "crt",
-      label: "Relatório CRT Geral",
-      confidence: crtEvidence.length >= 3 ? "high" : "medium",
-      evidence: crtEvidence,
-    };
-  }
-
-  return {
-    kind: "generic",
-    label: "Relatório RTA genérico",
-    confidence: "low",
-    evidence: [],
-  };
+  if (has("Tipo")) crtEvidence.push("Tipo"); if (has("Cliente")) crtEvidence.push("Cliente"); if (has("Data Criação")) crtEvidence.push("Data Criação"); if (has("Data Início de Processamento")) crtEvidence.push("Data Início de Processamento");
+  if (crtEvidence.length >= 2) return { kind:"crt",label:"Relatório CRT Geral",confidence:crtEvidence.length>=3?"high":"medium",evidence:crtEvidence };
+  return { kind:"generic",label:"Relatório RTA genérico",confidence:"low",evidence:[] };
 }
 
-export async function parseExcelFile(
-  file: File,
-  onProgress?: (progress: ParseProgress) => void,
-): Promise<Omit<ParsedReport, "executions"> & { executions: ReturnType<typeof classifyExecution>[] }> {
-  onProgress?.({ phase: "reading", percent: 10 });
-  const buffer = await file.arrayBuffer();
-  let workbook: XLSX.WorkBook;
-  try {
-    workbook = XLSX.read(buffer, { type: "array", cellDates: true });
-  } catch {
-    throw new ExcelParseError(
-      "Não foi possível ler o relatório. Verifique se o arquivo possui uma aba de execuções válida.",
-    );
-  }
-
-  return parseWorkbook(workbook, file.name, onProgress);
+function readWorkbook(buffer:ArrayBuffer):XLSX.WorkBook {
+  // Alguns relatórios são gerados por writers que deixam o tamanho descompactado do
+  // data descriptor como zero. O ZIP continua legível, mas SheetJS 0.18.5 imprime
+  // "Bad uncompressed size: X != 0" no console. Suprimimos somente esse aviso conhecido;
+  // qualquer outra mensagem/erro continua visível e uma falha real ainda lança exceção.
+  const originalError=console.error,originalWarn=console.warn;
+  const filtered=(original:(...args:unknown[])=>void)=>(...args:unknown[])=>{const text=args.map(String).join(" ");if(/^Bad (?:un)?compressed size:\s*\d+\s*!=\s*0\s*$/i.test(text))return;original(...args);};
+  console.error=filtered(originalError.bind(console)); console.warn=filtered(originalWarn.bind(console));
+  try { return XLSX.read(buffer,{type:"array",cellDates:true,WTF:false}); }
+  finally { console.error=originalError; console.warn=originalWarn; }
 }
 
-export function parseWorkbook(
-  workbook: XLSX.WorkBook,
-  fileName: string,
-  onProgress?: (progress: ParseProgress) => void,
-): ParsedReport {
-  const sheetNames = workbook.SheetNames;
-  if (!sheetNames.length) {
-    throw new ExcelParseError(
-      "Não foi possível ler o relatório. Verifique se o arquivo possui uma aba de execuções válida.",
-    );
-  }
+export async function parseExcelFile(file: File,onProgress?: (progress: ParseProgress) => void): Promise<Omit<ParsedReport,"executions"> & {executions:ReturnType<typeof classifyExecution>[]}> {
+  onProgress?.({phase:"reading",percent:10}); const buffer=await file.arrayBuffer(); let workbook:XLSX.WorkBook;
+  try { workbook=readWorkbook(buffer); } catch { throw new ExcelParseError("Não foi possível ler o relatório. Verifique se o arquivo possui uma aba de execuções válida."); }
+  return parseWorkbook(workbook,file.name,onProgress);
+}
 
-  const analyzedSheet = resolveExecutionSheet(sheetNames);
-  if (!analyzedSheet || !workbook.Sheets[analyzedSheet]) {
-    throw new ExcelParseError(
-      "Não foi possível ler o relatório. Verifique se o arquivo possui uma aba de execuções válida.",
-    );
-  }
-
-  onProgress?.({ phase: "extracting", percent: 35 });
-  const sheet = workbook.Sheets[analyzedSheet];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: null,
-    raw: true,
-  });
-
-  const headerRow = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, {
-    header: 1,
-    defval: null,
-  })[0];
-  const columns = (headerRow ?? [])
-    .map((value) => (value === null || value === undefined ? "" : String(value).trim()))
-    .filter(Boolean);
-
-  if (!columns.length || !rows.length) {
-    throw new ExcelParseError(
-      "Não foi possível ler o relatório. Verifique se o arquivo possui uma aba de execuções válida.",
-    );
-  }
-
-  const mapping = mapColumns(columns);
-  const missingExpectedColumns = EXPECTED_FIELDS.filter((field) => !mapping[field]).map((field) => field);
-  const warnings: string[] = [];
-  if (missingExpectedColumns.length) {
-    warnings.push("Algumas colunas não foram encontradas. O relatório poderá ser analisado parcialmente.");
-  }
-
-  const detection = detectReportType(columns);
-  if (detection.kind === "generic") {
-    warnings.push("O formato do relatório não foi reconhecido como Automation ou CRT Geral. Foi aplicado o mapeamento genérico.");
-  }
-
-  onProgress?.({ phase: "normalizing", percent: 60 });
-  const executions = normalizeRows(rows, mapping);
-
-  onProgress?.({ phase: "classifying", percent: 85 });
-  const classified = executions.map(classifyExecution);
-
-  const meta: ReportMeta = {
-    fileName,
-    sheetNames,
-    analyzedSheet,
-    columns,
-    missingExpectedColumns,
-    warnings,
-    rowCount: classified.length,
-  };
-
-  onProgress?.({ phase: "classifying", percent: 100 });
-  return { meta, executions: classified };
+export function parseWorkbook(workbook:XLSX.WorkBook,fileName:string,onProgress?: (progress:ParseProgress)=>void):ParsedReport {
+  const sheetNames=workbook.SheetNames;if(!sheetNames.length)throw new ExcelParseError("Não foi possível ler o relatório. Verifique se o arquivo possui uma aba de execuções válida.");
+  const analyzedSheet=resolveExecutionSheet(sheetNames);if(!analyzedSheet||!workbook.Sheets[analyzedSheet])throw new ExcelParseError("Não foi possível ler o relatório. Verifique se o arquivo possui uma aba de execuções válida.");
+  onProgress?.({phase:"extracting",percent:35});const sheet=workbook.Sheets[analyzedSheet];const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:null,raw:true});
+  const headerRow=XLSX.utils.sheet_to_json<(string|number|null)[]>(sheet,{header:1,defval:null})[0];const columns=(headerRow??[]).map(value=>value===null||value===undefined?"":String(value).trim()).filter(Boolean);
+  if(!columns.length||!rows.length)throw new ExcelParseError("Não foi possível ler o relatório. Verifique se o arquivo possui uma aba de execuções válida.");
+  const mapping=mapColumns(columns);const missingExpectedColumns=EXPECTED_FIELDS.filter(field=>!mapping[field]).map(field=>field);const warnings:string[]=[];
+  if(missingExpectedColumns.length)warnings.push("Algumas colunas não foram encontradas. O relatório poderá ser analisado parcialmente.");
+  const detection=detectReportType(columns);if(detection.kind==="generic")warnings.push("O formato do relatório não foi reconhecido como Automation ou CRT Geral. Foi aplicado o mapeamento genérico.");
+  onProgress?.({phase:"normalizing",percent:60});const executions=normalizeRows(rows,mapping);onProgress?.({phase:"classifying",percent:85});const classified=executions.map(classifyExecution);
+  const meta:ReportMeta={fileName,sheetNames,analyzedSheet,columns,missingExpectedColumns,warnings,rowCount:classified.length};onProgress?.({phase:"classifying",percent:100});return{meta,executions:classified};
 }
