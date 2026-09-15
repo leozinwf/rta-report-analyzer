@@ -1,4 +1,4 @@
-import { CheckCircle2, Clipboard, ExternalLink, Search, ShieldAlert, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Clipboard, ExternalLink, Search, ShieldAlert } from "lucide-react";
 import { useEffect,useMemo,useState } from "react";
 import { useReport } from "../context/ReportContext";
 import { loadJiraIssues,type JiraIssue } from "../services/jira/storage";
