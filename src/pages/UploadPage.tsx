@@ -1,24 +1,99 @@
-import { FileSpreadsheet, Layers3, Upload } from "lucide-react";
-import { useCallback, useState } from "react";
+import { Database, FileSpreadsheet, Layers3, Trash2, Upload } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProgressBar, progressLabel } from "../components/common/ProgressBar";
 import { useReport } from "../context/ReportContext";
 import { formatNumber } from "../utils/format";
 
+const DB_NAME = "rta-report-analyzer-cache";
+const STORE_NAME = "excel-files";
+const MAX_FILES = 5;
+
+type CachedFile = { id: string; name: string; size: number; savedAt: number };
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME, { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function listCachedFiles(): Promise<CachedFile[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
+    request.onsuccess = () => resolve((request.result as Array<CachedFile & { blob: Blob }>).sort((a, b) => b.savedAt - a.savedAt));
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function cacheFiles(files: File[]) {
+  const db = await openDb();
+  const current = await listCachedFiles();
+  const byId = new Map(current.map((item) => [item.id, item]));
+  for (const file of files) {
+    const id = `${file.name}:${file.size}:${file.lastModified}`;
+    byId.set(id, { id, name: file.name, size: file.size, savedAt: Date.now() });
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put({ id, name: file.name, size: file.size, savedAt: Date.now(), blob: file });
+  }
+  const all = await listCachedFiles();
+  for (const item of all.slice(MAX_FILES)) {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(item.id);
+  }
+}
+
+async function getCachedFile(id: string): Promise<File | null> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(id);
+    request.onsuccess = () => {
+      const item = request.result as (CachedFile & { blob: Blob }) | undefined;
+      resolve(item ? new File([item.blob], item.name, { type: item.blob.type }) : null);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function deleteCachedFile(id: string) {
+  const db = await openDb();
+  return new Promise<void>((resolve, reject) => {
+    const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
 export function UploadPage() {
   const { loadFiles, runAnalysis, phase, progress, parsed, loadedReports, error, warnings } = useReport();
   const [dragOver, setDragOver] = useState(false);
+  const [cachedFiles, setCachedFiles] = useState<CachedFile[]>([]);
+  const [selectedCached, setSelectedCached] = useState<string[]>([]);
   const navigate = useNavigate();
 
-  const onFiles = useCallback(
-    async (files: FileList | null) => {
-      if (!files?.length) return;
-      const selected = Array.from(files).filter((file) => /\.(xlsx|xls)$/i.test(file.name));
-      if (!selected.length) return;
-      await loadFiles(selected);
-    },
-    [loadFiles],
-  );
+  const refreshCache = useCallback(async () => {
+    try { setCachedFiles(await listCachedFiles()); } catch { setCachedFiles([]); }
+  }, []);
+
+  useEffect(() => { void refreshCache(); }, [refreshCache]);
+
+  const onFiles = useCallback(async (files: FileList | File[]) => {
+    const selected = Array.from(files).filter((file) => /\.(xlsx|xls)$/i.test(file.name)).slice(0, MAX_FILES);
+    if (!selected.length) return;
+    await cacheFiles(selected);
+    await refreshCache();
+    await loadFiles(selected);
+  }, [loadFiles, refreshCache]);
+
+  async function reuseCached() {
+    const files = (await Promise.all(selectedCached.map(getCachedFile))).filter(Boolean) as File[];
+    if (files.length) await loadFiles(files);
+  }
 
   async function analyze() {
     await runAnalysis();
@@ -26,128 +101,58 @@ export function UploadPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-12">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">Ferramenta interna de operação</p>
-      <h1 className="mt-3 text-4xl font-semibold tracking-tight">RTA Report Analyzer</h1>
-      <p className="mt-3 max-w-2xl text-muted">
-        Envie um relatório Automation, CRT Geral ou os dois juntos. O formato é identificado automaticamente e os arquivos podem ser analisados separadamente na identificação e combinados no diagnóstico.
-      </p>
-
-      <div
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragOver(false);
-          void onFiles(event.dataTransfer.files);
-        }}
-        className={`mt-10 rounded-3xl border-2 border-dashed p-12 text-center transition ${
-          dragOver ? "border-accent bg-accent/10" : "border-line bg-panel/80"
-        }`}
-      >
-        <FileSpreadsheet className="mx-auto size-12 text-accent" />
-        <p className="mt-4 text-lg font-medium">Arraste um ou mais relatórios Excel aqui</p>
-        <p className="mt-1 text-sm text-muted">Você pode enviar Automation + CRT Geral ao mesmo tempo</p>
-        <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800">
-          <Upload className="size-4" />
-          Selecionar arquivos
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              void onFiles(event.target.files);
-              event.target.value = "";
-            }}
-          />
-        </label>
-        <p className="mt-4 text-xs text-muted">Formatos aceitos: .xlsx · .xls · processamento 100% local</p>
+    <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-6 py-8">
+      <div className="text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">Ferramenta interna de operação</p>
+        <h1 className="mt-2 text-4xl font-semibold tracking-tight">RTA Report Analyzer</h1>
+        <p className="mx-auto mt-2 max-w-2xl text-sm text-muted">Envie Automation, CRT Geral ou os dois juntos. Os últimos 5 arquivos ficam salvos temporariamente neste navegador para reutilização.</p>
       </div>
 
-      {phase === "parsing" && progress ? (
-        <div className="mt-8 rounded-2xl border border-line bg-panel p-5">
-          <ProgressBar percent={progress.percent} label={progressLabel(progress.phase)} />
-        </div>
-      ) : null}
+      <div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); void onFiles(e.dataTransfer.files); }} className={`mt-6 rounded-3xl border-2 border-dashed p-7 text-center transition ${dragOver ? "border-accent bg-accent/10" : "border-line bg-panel/80"}`}>
+        <FileSpreadsheet className="mx-auto size-10 text-accent" />
+        <p className="mt-3 font-medium">Arraste um ou mais relatórios Excel aqui</p>
+        <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800">
+          <Upload className="size-4" /> Selecionar arquivos
+          <input type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => { if (e.target.files) void onFiles(e.target.files); e.target.value = ""; }} />
+        </label>
+        <p className="mt-3 text-xs text-muted">Até 5 arquivos · .xlsx ou .xls · armazenamento local no navegador</p>
+      </div>
 
-      {error ? (
-        <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
-          {error}
-        </div>
-      ) : null}
-
-      {loadedReports.length ? (
-        <div className="mt-8 rounded-2xl border border-line bg-panel p-6">
-          <div className="flex items-center gap-2">
-            <Layers3 className="size-5 text-accent" />
-            <p className="font-semibold">Arquivos identificados</p>
+      {cachedFiles.length ? (
+        <section className="mt-5 rounded-2xl border border-line bg-panel p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2"><Database className="size-4 text-accent" /><p className="text-sm font-semibold">Arquivos recentes ({cachedFiles.length}/5)</p></div>
+            <button disabled={!selectedCached.length} onClick={() => void reuseCached()} className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Reutilizar selecionados</button>
           </div>
-          <div className="mt-4 space-y-3">
-            {loadedReports.map((item) => (
-              <div key={item.fileName} className="rounded-xl border border-line bg-white/60 p-4 dark:bg-slate-950/30">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{item.fileName}</p>
-                    <p className="mt-1 text-xs text-muted">{formatNumber(item.rowCount)} execuções</p>
-                  </div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      item.detection.kind === "automation"
-                        ? "bg-blue-100 text-blue-800"
-                        : item.detection.kind === "crt"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-amber-100 text-amber-800"
-                    }`}
-                  >
-                    {item.detection.label}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted">
-                  Confiança: {item.detection.confidence === "high" ? "alta" : item.detection.confidence === "medium" ? "média" : "baixa"}
-                  {item.detection.evidence.length ? ` · identificado por: ${item.detection.evidence.join(", ")}` : ""}
-                </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {cachedFiles.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 rounded-xl bg-panel-2 px-3 py-2">
+                <input type="checkbox" checked={selectedCached.includes(item.id)} onChange={() => setSelectedCached((v) => v.includes(item.id) ? v.filter((id) => id !== item.id) : [...v, item.id])} />
+                <button className="min-w-0 flex-1 text-left" onClick={() => setSelectedCached((v) => v.includes(item.id) ? v.filter((id) => id !== item.id) : [...v, item.id])}>
+                  <p className="truncate text-xs font-semibold">{item.name}</p><p className="text-[11px] text-muted">{(item.size / 1024 / 1024).toFixed(1)} MB</p>
+                </button>
+                <button title="Remover arquivo salvo" onClick={async () => { await deleteCachedFile(item.id); setSelectedCached((v) => v.filter((id) => id !== item.id)); await refreshCache(); }} className="rounded-md p-1.5 text-muted hover:bg-white hover:text-red-600"><Trash2 className="size-4" /></button>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       ) : null}
 
-      {warnings.map((warning) => (
-        <div key={warning} className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-          {warning}
-        </div>
-      ))}
+      {phase === "parsing" && progress ? <div className="mt-5 rounded-2xl border border-line bg-panel p-4"><ProgressBar percent={progress.percent} label={progressLabel(progress.phase)} /></div> : null}
+      {error ? <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">{error}</div> : null}
 
       {parsed && (phase === "parsed" || phase === "analyzing" || phase === "ready") ? (
-        <div className="mt-8 rounded-2xl border border-line bg-panel p-6">
-          <p className="text-sm font-semibold text-emerald-700">
-            {loadedReports.length > 1 ? `${loadedReports.length} relatórios prontos para análise conjunta` : "Relatório carregado"}
-          </p>
-          <p className="mt-3 text-2xl font-semibold">{formatNumber(parsed.meta.rowCount)} execuções encontradas</p>
-          <p className="mt-2 text-sm text-muted">
-            {loadedReports.length > 1
-              ? "Os registros dos arquivos foram normalizados para o mesmo formato e serão analisados em conjunto."
-              : `${parsed.meta.columns.length} colunas identificadas · Aba: ${parsed.meta.analyzedSheet}`}
-          </p>
-          {phase === "analyzing" && progress ? (
-            <div className="mt-5">
-              <ProgressBar percent={progress.percent} label={progressLabel(progress.phase)} />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void analyze()}
-              className="mt-5 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800"
-            >
-              {loadedReports.length > 1 ? "Analisar relatórios combinados" : "Analisar relatório"}
-            </button>
+        <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 text-center">
+          <div className="flex items-center justify-center gap-2"><Layers3 className="size-5 text-emerald-700" /><p className="font-semibold text-emerald-800">{loadedReports.length > 1 ? `${loadedReports.length} relatórios prontos para análise conjunta` : "Relatório pronto para análise"}</p></div>
+          <p className="mt-2 text-xl font-semibold">{formatNumber(parsed.meta.rowCount)} execuções encontradas</p>
+          {phase === "analyzing" && progress ? <div className="mx-auto mt-4 max-w-lg"><ProgressBar percent={progress.percent} label={progressLabel(progress.phase)} /></div> : (
+            <button type="button" onClick={() => void analyze()} className="mt-4 min-w-56 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-800">Analisar relatório</button>
           )}
         </div>
       ) : null}
+
+      {loadedReports.length ? <div className="mt-5 grid gap-2 sm:grid-cols-2">{loadedReports.map((item) => <div key={item.fileName} className="rounded-xl border border-line bg-panel p-3"><p className="truncate text-xs font-semibold">{item.fileName}</p><p className="mt-1 text-xs text-muted">{item.detection.label} · {formatNumber(item.rowCount)} execuções</p></div>)}</div> : null}
+      {warnings.map((warning) => <div key={warning} className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">{warning}</div>)}
     </div>
   );
 }
