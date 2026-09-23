@@ -16,6 +16,7 @@ const TenantsPage = lazy(() => import("./pages/TenantsPage").then((module) => ({
 const TenantDetailPage = lazy(() => import("./pages/TenantsPage").then((module) => ({ default: module.TenantDetailPage })));
 const JiraPage = lazy(() => import("./pages/JiraPage").then((module) => ({ default: module.JiraPage })));
 const WorkQueuePage = lazy(() => import("./pages/WorkQueuePage").then((module) => ({ default: module.WorkQueuePage })));
+const WeeklyPage = lazy(() => import("./pages/WeeklyPage").then((module) => ({ default: module.WeeklyPage })));
 
 function PageLoading() {
   return <div className="rounded-2xl border border-line bg-panel p-6 text-sm text-muted">Carregando análise…</div>;
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/relatorios" element={<UploadPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/fila" element={<WorkQueuePage />} />
+          <Route path="/semana" element={<WeeklyPage />} />
           <Route path="/execucoes" element={<ExecutionsPage />} />
           <Route path="/robos" element={<RobotsPage />} />
           <Route path="/robos/:robotId" element={<RobotDetailPage />} />

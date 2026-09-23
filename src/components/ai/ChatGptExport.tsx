@@ -1,0 +1,22 @@
+import { Bot, Check, Copy, Eye, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useReport } from "../../context/ReportContext";
+import { buildChatGptPackage } from "../../services/ai/chatGptPackage";
+import { loadJiraIssues, type JiraIssue } from "../../services/jira/storage";
+
+export function ChatGptExport() {
+  const { filteredAnalysis, filteredExecutions } = useReport();
+  const [copied,setCopied]=useState(false); const [preview,setPreview]=useState(false); const [jiraIssues,setJiraIssues]=useState<JiraIssue[]>([]);
+  useEffect(()=>{
+    let active=true;
+    const refresh=()=>{void loadJiraIssues().then(items=>{if(active)setJiraIssues(items);}).catch(()=>{if(active)setJiraIssues([]);});};
+    refresh();
+    window.addEventListener("jira-issues-updated",refresh);
+    window.addEventListener("focus",refresh);
+    return()=>{active=false;window.removeEventListener("jira-issues-updated",refresh);window.removeEventListener("focus",refresh);};
+  },[filteredAnalysis]);
+  const text=useMemo(()=>filteredAnalysis?buildChatGptPackage(filteredAnalysis,filteredExecutions,jiraIssues):"",[filteredAnalysis,filteredExecutions,jiraIssues]);
+  if(!filteredAnalysis)return null;
+  async function copyPackage(){await navigator.clipboard.writeText(text);setCopied(true);window.setTimeout(()=>setCopied(false),2500);}
+  return <><div className="border-b border-line bg-cyan-50/60 px-6 py-3 dark:bg-cyan-950/20"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent"><Bot className="size-5"/></span><div><p className="text-sm font-semibold text-ink">Analisar com ChatGPT · Pacote v5 + Jira</p><p className="text-xs text-muted">Cruza Jira por Robô/Type + problema e gera sugestões de card em formato pronto para uso.</p><p className="mt-0.5 text-[11px] text-muted">{filteredExecutions.length.toLocaleString("pt-BR")} execuções · {jiraIssues.length.toLocaleString("pt-BR")} Jiras disponíveis · {text.length.toLocaleString("pt-BR")} caracteres</p></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>setPreview(true)} className="inline-flex items-center gap-2 rounded-xl border border-line bg-panel px-4 py-2.5 text-sm font-semibold text-ink"><Eye className="size-4"/>Visualizar pacote</button><button type="button" onClick={()=>void copyPackage()} className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white">{copied?<Check className="size-4"/>:<Copy className="size-4"/>}{copied?"Pacote copiado":"Copiar para ChatGPT"}</button></div></div></div>{preview?<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"><div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-2xl border border-line bg-panel shadow-2xl"><div className="flex items-center justify-between border-b border-line px-5 py-4"><div><p className="font-semibold text-ink">Pacote para ChatGPT · v5 + Jira</p><p className="text-xs text-muted">Matching isolado por Robô/Type com {jiraIssues.length.toLocaleString("pt-BR")} cards Jira.</p></div><button onClick={()=>setPreview(false)} className="rounded-lg p-2 text-muted" aria-label="Fechar"><X className="size-5"/></button></div><pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300">{text}</pre><div className="flex items-center justify-between border-t border-line px-5 py-4"><span className="text-xs text-muted">{text.length.toLocaleString("pt-BR")} caracteres</span><button onClick={()=>void copyPackage()} className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white"><Copy className="size-4"/>Copiar pacote</button></div></div></div>:null}</>;
+}

@@ -1,4 +1,4 @@
-import type { EventType, ProblemCategory, Severity } from "./execution";
+import type { EventType, ExecutionPlatform, ProblemCategory, Severity } from "./execution";
 
 export interface GlobalFilters {
   dateFrom?: string;
@@ -11,6 +11,7 @@ export interface GlobalFilters {
   tenants: string[];
   attempts: number[];
   eventTypes: EventType[];
+  platforms: ExecutionPlatform[];
   search: string;
 }
 
@@ -24,22 +25,15 @@ export function emptyFilters(): GlobalFilters {
     tenants: [],
     attempts: [],
     eventTypes: [],
+    platforms: [],
     search: "",
   };
 }
 
 export function hasActiveFilters(filters: GlobalFilters): boolean {
   return Boolean(
-    filters.dateFrom ||
-      filters.dateTo ||
-      filters.robots.length ||
-      filters.statuses.length ||
-      filters.categories.length ||
-      filters.severities.length ||
-      filters.environments.length ||
-      filters.tenants.length ||
-      filters.attempts.length ||
-      filters.eventTypes.length ||
-      filters.search.trim(),
+    filters.dateFrom || filters.dateTo || filters.robots.length || filters.statuses.length || filters.categories.length ||
+    filters.severities.length || filters.environments.length || filters.tenants.length || filters.attempts.length ||
+    filters.eventTypes.length || filters.platforms.length || filters.search.trim(),
   );
 }

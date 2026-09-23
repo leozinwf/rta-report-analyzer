@@ -1,4 +1,4 @@
-import { ClipboardList, FileSpreadsheet, LayoutDashboard, LogOut, Sparkles, TicketCheck, X } from "lucide-react";
+import { CalendarDays, ClipboardList, FileSpreadsheet, LayoutDashboard, LogOut, Sparkles, TicketCheck, X } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { AIService } from "../../ai/AIService";
 import { useReport } from "../../context/ReportContext";
@@ -8,6 +8,7 @@ const ITEMS = [
   { to: "/relatorios", label: "Carregar relatórios", icon: FileSpreadsheet },
   { to: "/dashboard", label: "Dashboard" },
   { to: "/fila", label: "Fila de trabalho", icon: ClipboardList },
+  { to: "/semana", label: "Semana operacional", icon: CalendarDays },
   { to: "/execucoes", label: "Execuções" },
   { to: "/robos", label: "Robôs" },
   { to: "/problemas", label: "Problemas" },
