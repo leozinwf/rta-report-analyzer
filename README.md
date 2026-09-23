@@ -36,7 +36,7 @@ Investigação do cenário
 - Filtros e navegação por diferentes dimensões do relatório
 - Estrutura preparada para evolução com recursos de análise assistida
 
-A aplicação possui páginas específicas para **Dashboard, Execuções, Robôs, Problemas, Etapas, Tentativas, Ambientes e Tenants**, além do fluxo de importação do relatório. fileciteturn23file0L2-L5
+A aplicação possui páginas específicas para **Dashboard, Execuções, Robôs, Problemas, Etapas, Tentativas, Ambientes e Tenants**, além do fluxo de importação do relatório.
 
 ## Tecnologias
 
@@ -50,7 +50,7 @@ A aplicação possui páginas específicas para **Dashboard, Execuções, Robôs
 - SheetJS (`xlsx`)
 - Vitest
 
-As dependências e scripts do projeto estão definidos em `package.json`, incluindo build com TypeScript/Vite e execução de testes com Vitest. fileciteturn19file0L1-L6
+As dependências e scripts do projeto estão definidos em `package.json`, incluindo build com TypeScript/Vite e execução de testes com Vitest.
 
 ## Arquitetura
 
@@ -70,7 +70,7 @@ src/
 └── utils/       # funções utilitárias
 ```
 
-A organização atual separa páginas, hooks, services, context, fixtures, tipos, utilitários e recursos de análise, o que facilita a evolução do projeto. fileciteturn20file0L1-L2
+A organização atual separa páginas, hooks, services, context, fixtures, tipos, utilitários e recursos de análise, o que facilita a evolução do projeto.
 
 ## Como executar
 
@@ -84,6 +84,59 @@ A organização atual separa páginas, hooks, services, context, fixtures, tipos
 ```bash
 npm install
 ```
+
+### Variáveis de ambiente
+
+Copie o arquivo de exemplo antes de iniciar o projeto:
+
+```bash
+cp .env.example .env.local
+```
+
+No Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Preencha somente as integrações que pretende testar. A consulta do Jira usa a URL da organização, e-mail, API token e uma expressão JQL. A versão com filtros de sprint também usa o ID do board.
+
+Para o painel operacional, prefira consultar apenas cards ainda não concluídos:
+
+```env
+JIRA_JQL=project = DM AND statusCategory != Done ORDER BY updated DESC
+JIRA_MAX_RESULTS=500
+```
+
+> As credenciais do Jira não usam o prefixo `VITE_`: elas devem permanecer somente no backend/serverless e nunca ser incorporadas ao código do navegador.
+
+A interface atual prepara e copia o conteúdo do card do Jira; a criação remota do card ainda não é realizada pela aplicação.
+
+### Proteção de acesso
+
+Enquanto a aplicação estiver publicada fora da VPN, configure estas variáveis tanto no `.env.local` quanto nas variáveis de ambiente da Vercel:
+
+```env
+APP_ACCESS_PASSWORD=uma-senha-forte-e-exclusiva
+APP_SESSION_SECRET=um-segredo-aleatorio-com-pelo-menos-32-caracteres
+APP_SESSION_TTL_HOURS=8
+```
+
+Gere um segredo de sessão seguro executando:
+
+```bash
+npm run auth:secret
+```
+
+A senha e o segredo não usam o prefixo `VITE_` e não são enviados no bundle do navegador. O middleware da Vercel bloqueia páginas e APIs até que uma sessão assinada seja criada. Para testar as funções e o middleware localmente usando diretamente o `.env.local`, execute:
+
+```bash
+npm run dev:secure
+```
+
+O comando carrega as variáveis somente no processo local e inicia o `vercel dev --local` com uma configuração própria para desenvolvimento. Essa configuração permite o React Refresh sem enfraquecer a política CSP usada em produção. O servidor normal do Vite não executa recursos serverless da Vercel.
+
+Como alternativa, cadastre as variáveis no ambiente **Development** do projeto e execute `npx vercel pull --environment=development` antes de `npx vercel dev`.
 
 ### Desenvolvimento
 

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { parseWorkbook } from "../excel/parser";
+import { parseWorkbook } from "../excel/workbook";
 import { analyzeReport } from "./index";
 
 const SAMPLE = "C:\\Users\\LeonardoSabatini\\Desktop\\01a042fd-041d-768e-8671-224d8b58d1c5.xlsx";

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { mapColumns, resolveExecutionSheet } from "./columnMap";
 import { normalizeRows } from "./normalize";
-import { detectReportType, parseWorkbook } from "./parser";
+import { detectReportType } from "./parser";
+import { parseWorkbook } from "./workbook";
 
 describe("column mapping", () => {
   it("maps the real Automation report headers", () => {

@@ -1,14 +1,11 @@
-import * as XLSX from "xlsx";
 import { CATEGORY_LABELS, EVENT_TYPE_LABELS, SEVERITY_LABELS } from "../../data/labels";
 import type { ClassifiedExecution, DashboardAnalysis } from "../../types";
 import { formatDateTime } from "../../utils/date";
 import { downloadBlob } from "../../utils/format";
 
-function sheetFrom(rows: Record<string, unknown>[]): XLSX.WorkSheet {
-  return XLSX.utils.json_to_sheet(rows);
-}
-
-export function exportAnalysisExcel(analysis: DashboardAnalysis, executions: ClassifiedExecution[]): void {
+export async function exportAnalysisExcel(analysis: DashboardAnalysis, executions: ClassifiedExecution[]): Promise<void> {
+  const XLSX = await import("xlsx");
+  const sheetFrom = (rows: Record<string, unknown>[]) => XLSX.utils.json_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
 
   XLSX.utils.book_append_sheet(

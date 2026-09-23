@@ -1,38 +1,17 @@
-import { AlertTriangle, Ban, CheckCircle2, Gauge, Siren, TriangleAlert } from "lucide-react";
+import { Gauge } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { CATEGORY_LABELS, EVENT_TYPE_LABELS } from "../data/labels";
 import { useReport } from "../context/ReportContext";
 import type { Anomaly, DashboardAnalysis, ErrorAnalysis } from "../types";
 import { formatNumber, formatPercent } from "../utils/format";
-import { CHART_AXIS, CHART_COLORS, CHART_TOOLTIP } from "../utils/chartTheme";
 import { CategoryBadge, EventTypeBadge, SeverityBadge } from "../components/common/Badge";
 import { EmptyState } from "../components/common/EmptyState";
 import { Modal } from "../components/common/Modal";
 import { RobotNameCell } from "../components/common/RobotNameCell";
 import { SectionHeader } from "../components/common/SectionHeader";
-import { StatCard } from "../components/common/StatCard";
 import { ProblemDetail } from "../components/details/ProblemDetail";
-
-const PIE_COLORS = [
-  CHART_COLORS.success,
-  CHART_COLORS.danger,
-  CHART_COLORS.unstable,
-  CHART_COLORS.muted,
-  CHART_COLORS.warning,
-  "#475569",
-];
+import { buildRawStatusDistribution } from "../services/analysis/dashboardData";
 
 const ANOMALY_TYPE_LABELS: Record<Anomaly["type"], string> = {
   robot_failure_rate: "Taxa de falha do robô",
@@ -43,33 +22,15 @@ const ANOMALY_TYPE_LABELS: Record<Anomaly["type"], string> = {
 };
 
 export function DashboardPage() {
-  const { filteredAnalysis } = useReport();
+  const { filteredAnalysis, filteredExecutions } = useReport();
   const [problem, setProblem] = useState<ErrorAnalysis | null>(null);
   const [anomaly, setAnomaly] = useState<Anomaly | null>(null);
   const [sort, setSort] = useState<"count" | "percent" | "robots" | "severity">("count");
   const analysis = filteredAnalysis;
 
-  const healthData = useMemo(() => {
-    if (!analysis) return [];
-    return [
-      { name: "Sucesso", value: analysis.metrics.successRate },
-      { name: "Falha", value: analysis.metrics.errorRate },
-      { name: "Instabilidade", value: analysis.metrics.instabilityRate },
-      { name: "Sem dados", value: analysis.metrics.noResultRate },
-      { name: "Avisos", value: analysis.metrics.warningRate },
-    ];
-  }, [analysis]);
-
-  const pieData = useMemo(() => {
-    if (!analysis) return [];
-    return [
-      { name: "Sucesso", value: analysis.metrics.successCount },
-      { name: "Erro", value: analysis.metrics.errorCount },
-      { name: "Site instável", value: analysis.metrics.instabilityCount },
-      { name: "Sem resultados", value: analysis.metrics.noResultRate },
-      { name: "Aviso", value: analysis.metrics.warningCount },
-    ].filter((item) => item.value > 0);
-  }, [analysis]);
+  const statusData = useMemo(() => {
+    return buildRawStatusDistribution(filteredExecutions);
+  }, [filteredExecutions]);
 
   if (!analysis) {
     return <EmptyState icon={Gauge} title="Nenhum relatório analisado" description="Carregue um Excel para ver o dashboard." />;
@@ -88,14 +49,48 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Total" value={formatNumber(metrics.total)} icon={Gauge} />
-        <StatCard label="Sucessos" value={formatNumber(metrics.successCount)} hint={formatPercent(metrics.successRate)} icon={CheckCircle2} tone="success" />
-        <StatCard label="Erros" value={formatNumber(metrics.errorCount)} hint={formatPercent(metrics.errorRate)} icon={Ban} tone="danger" />
-        <StatCard label="Site instável" value={formatNumber(metrics.instabilityCount)} hint={formatPercent(metrics.instabilityRate)} icon={Siren} tone="unstable" />
-        <StatCard label="Sem resultados" value={formatNumber(metrics.noResultCount)} hint={formatPercent(metrics.noResultRate)} icon={TriangleAlert} tone="muted" />
-        <StatCard label="Avisos" value={formatNumber(metrics.warningCount)} hint={formatPercent(metrics.warningRate)} icon={AlertTriangle} tone="warning" />
-      </div>
+      <section className="overflow-hidden rounded-2xl border border-line bg-panel">
+        <div className="flex flex-col justify-between gap-4 border-b border-line p-5 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Visão geral</p>
+            <h2 className="mt-1 text-lg font-semibold">Distribuição das execuções</h2>
+            <p className="mt-1 text-sm text-muted">Percentuais calculados sobre o recorte exibido.</p>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl bg-panel-2 px-4 py-3">
+            <Gauge className="size-5 text-accent" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Total analisado</p>
+              <p className="font-mono text-xl font-semibold">{formatNumber(metrics.total)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 pt-5">
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-panel-2" aria-label="Distribuição percentual das execuções">
+            {statusData.map((item) => (
+              <div key={item.key} style={{ width: `${item.rate * 100}%`, backgroundColor: item.color }} title={`${item.name}: ${formatPercent(item.rate)}`} />
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-px bg-line sm:grid-cols-2 xl:grid-cols-5 mt-5">
+          {statusData.map((item) => (
+            <article key={item.key} className="bg-panel p-5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-sm font-medium">
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  {item.name}
+                </span>
+                <span className="text-xs text-muted">{formatNumber(item.value)}</span>
+              </div>
+              <p className="mt-3 font-mono text-3xl font-semibold tracking-tight" style={{ color: item.color }}>{formatPercent(item.rate)}</p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-panel-2">
+                <div className="h-full rounded-full" style={{ width: `${item.rate * 100}%`, backgroundColor: item.color }} />
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-line bg-panel p-5">
         <SectionHeader title="Resumo do relatório" description="Gerado automaticamente a partir dos dados, sem IA." />
@@ -103,45 +98,6 @@ export function DashboardPage() {
           {analysis.summary.map((line) => (
             <p key={line}>{line}</p>
           ))}
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-2xl border border-line bg-panel p-5">
-          <SectionHeader title="Saúde dos robôs" description="Taxas calculadas sobre o recorte atual." />
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={healthData}>
-                <XAxis dataKey="name" stroke={CHART_AXIS} fontSize={12} />
-                <YAxis stroke={CHART_AXIS} fontSize={12} tickFormatter={(value) => `${Math.round(Number(value) * 100)}%`} />
-                <Tooltip formatter={(value) => formatPercent(Number(value))} contentStyle={CHART_TOOLTIP} />
-                <Bar dataKey="value" fill={CHART_COLORS.accent} radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-line bg-panel p-5">
-          <SectionHeader title="Distribuição de status" />
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
-                  {pieData.map((entry, index) => (
-                    <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => formatNumber(Number(value))} contentStyle={CHART_TOOLTIP} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
-            {pieData.map((item, index) => (
-              <span key={item.name} className="inline-flex items-center gap-1.5">
-                <span className="size-2 rounded-full" style={{ background: PIE_COLORS[index] }} />
-                {item.name}
-              </span>
-            ))}
-          </div>
         </div>
       </section>
 

@@ -1,4 +1,7 @@
+import { List } from "lucide-react";
+import { useMemo, useState } from "react";
 import { CATEGORY_LABELS } from "../../data/labels";
+import { useReport } from "../../context/ReportContext";
 import type { ErrorAnalysis } from "../../types";
 import { formatNumber, formatPercent } from "../../utils/format";
 import { normalizeKey } from "../../utils/text";
@@ -6,6 +9,7 @@ import { CategoryBadge, EventTypeBadge, SeverityBadge } from "../common/Badge";
 import { Modal } from "../common/Modal";
 import { RobotNameCell } from "../common/RobotNameCell";
 import { TokenCell } from "../common/TokenCell";
+import { TokensModal } from "../common/TokensModal";
 
 export function ProblemDetail({
   problem,
@@ -14,6 +18,19 @@ export function ProblemDetail({
   problem: ErrorAnalysis | null;
   onClose: () => void;
 }) {
+  const { filteredExecutions } = useReport();
+  const [tokensOpen, setTokensOpen] = useState(false);
+  const problemMessage = problem?.message ?? "";
+  const tokens = useMemo(() => {
+    if (!problemMessage) return [];
+    return [...new Set(
+      filteredExecutions
+        .filter((row) => normalizeKey(row.message) === normalizeKey(problemMessage))
+        .map((row) => row.id)
+        .filter(Boolean),
+    )];
+  }, [filteredExecutions, problemMessage]);
+
   return (
     <Modal open={Boolean(problem)} title={problem?.message || "Problema"} onClose={onClose} wide>
       {problem ? (
@@ -50,14 +67,25 @@ export function ProblemDetail({
           </div>
           {problem.sampleIds.length ? (
             <div>
-              <h3 className="mb-2 text-sm font-semibold">Tokens de exemplo</h3>
-              <ul className="space-y-2">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold">Tokens de exemplo</h3>
+                  <p className="mt-0.5 text-xs text-muted">{tokens.length.toLocaleString("pt-BR")} tokens encontrados para este problema</p>
+                </div>
+                {tokens.length > problem.sampleIds.length ? (
+                  <button type="button" onClick={() => setTokensOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold hover:bg-panel-2">
+                    <List className="size-3.5" /> Ver todos
+                  </button>
+                ) : null}
+              </div>
+              <ul className="grid gap-2 sm:grid-cols-2">
                 {problem.sampleIds.map((token) => (
-                  <li key={token}>
-                    <TokenCell token={token} />
+                  <li key={token} className="min-w-0 rounded-lg border border-line bg-panel-2 px-3 py-2">
+                    <TokenCell token={token} full />
                   </li>
                 ))}
               </ul>
+              <TokensModal open={tokensOpen} title={`Tokens · ${problem.message}`} tokens={tokens} onClose={() => setTokensOpen(false)} />
             </div>
           ) : null}
           <div>

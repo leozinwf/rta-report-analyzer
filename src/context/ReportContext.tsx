@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useDeferredValue,
   useMemo,
   useState,
   type ReactNode,
@@ -146,11 +147,15 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const runAnalysis = useCallback(async () => {
     if (!parsed) return;
     setPhase("analyzing");
-    setProgress({ phase: "analyzing", percent: 40 });
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    setProgress({ phase: "analyzing", percent: 12 });
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    setProgress({ phase: "analyzing", percent: 38 });
+    await new Promise((resolve) => setTimeout(resolve, 60));
     const result = analyzeReport(parsed.executions);
-    setProgress({ phase: "analyzing", percent: 100 });
+    setProgress({ phase: "analyzing", percent: 92 });
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     setAnalysis(result);
+    setProgress({ phase: "analyzing", percent: 100 });
     setPhase("ready");
     setProgress(null);
   }, [parsed]);
@@ -170,10 +175,12 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     return filterExecutions(parsed.executions, filters);
   }, [parsed, filters]);
 
+  const deferredExecutions = useDeferredValue(filteredExecutions);
+
   const filteredAnalysis = useMemo(() => {
     if (phase !== "ready") return null;
-    return analyzeReport(filteredExecutions);
-  }, [filteredExecutions, phase]);
+    return analyzeReport(deferredExecutions);
+  }, [deferredExecutions, phase]);
 
   const value = useMemo<ReportContextValue>(
     () => ({
