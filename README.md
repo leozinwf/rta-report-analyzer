@@ -178,12 +178,9 @@ O projeto está sendo evoluído continuamente, com foco em ampliar a profundidad
 
 ## Roadmap
 
-- [ ] Melhorar classificação e agrupamento de problemas
-- [ ] Expandir indicadores e visualizações
-- [ ] Melhorar análise de tendências
-- [ ] Ampliar cobertura de testes
-- [ ] Evoluir recursos de análise assistida
-- [ ] Adicionar documentação técnica mais detalhada
+O projeto está evoluindo de leitor de relatórios para um HUB operacional integrado ao Automation, Jira e Docs.
+
+Consulte o [roadmap completo do HUB operacional](docs/ROADMAP_HUB_OPERACIONAL.md), que registra as fases, critérios de conclusão, princípios de segurança e decisões do produto.
 
 ## Autor
 
