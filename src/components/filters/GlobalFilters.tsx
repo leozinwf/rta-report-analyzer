@@ -4,7 +4,7 @@ import { CATEGORY_LABELS, EVENT_TYPE_LABELS, SEVERITY_LABELS } from "../../data/
 import { useReport } from "../../context/ReportContext";
 import { emptyFilters } from "../../types";
 import type { EventType, ProblemCategory, Severity } from "../../types";
-import { toDateInputValue } from "../../utils/date";
+import { getDateBounds, toDateInputValue } from "../../utils/date";
 
 function ChipSelect({
   label,
@@ -61,14 +61,15 @@ export function GlobalFilters() {
   const executions = parsed?.executions ?? [];
   const options = useMemo(() => {
     const dates = executions.map((row) => row.date).filter(Boolean) as Date[];
+    const dateBounds = getDateBounds(dates);
     return {
       robots: [...new Set(executions.map((row) => row.robot))].sort(),
       statuses: [...new Set(executions.map((row) => row.status))].sort(),
       environments: [...new Set(executions.map((row) => row.environment || "N/D"))].sort(),
       tenants: [...new Set(executions.map((row) => row.tenant || "N/D"))].sort(),
       attempts: [...new Set(executions.map((row) => row.attempt ?? 1))].sort((a, b) => a - b),
-      minDate: dates.length ? toDateInputValue(new Date(Math.min(...dates.map((date) => date.getTime())))) : "",
-      maxDate: dates.length ? toDateInputValue(new Date(Math.max(...dates.map((date) => date.getTime())))) : "",
+      minDate: dateBounds.min ? toDateInputValue(dateBounds.min) : "",
+      maxDate: dateBounds.max ? toDateInputValue(dateBounds.max) : "",
     };
   }, [executions]);
 

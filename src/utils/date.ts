@@ -37,6 +37,23 @@ export function toDateInputValue(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+export function getDateBounds(dates: Iterable<Date>): { min?: Date; max?: Date } {
+  let minTime = Number.POSITIVE_INFINITY;
+  let maxTime = Number.NEGATIVE_INFINITY;
+
+  for (const date of dates) {
+    const time = date.getTime();
+    if (!Number.isFinite(time)) continue;
+    if (time < minTime) minTime = time;
+    if (time > maxTime) maxTime = time;
+  }
+
+  return {
+    min: Number.isFinite(minTime) ? new Date(minTime) : undefined,
+    max: Number.isFinite(maxTime) ? new Date(maxTime) : undefined,
+  };
+}
+
 export function formatDateTime(date?: Date): string {
   if (!date) return "N/D";
   return new Intl.DateTimeFormat("pt-BR", {

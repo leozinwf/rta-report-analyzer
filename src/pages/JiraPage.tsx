@@ -53,7 +53,7 @@ export function JiraPage() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState("");
   const [jql, setJql] = useState("");
-  const [period, setPeriod] = useState<JiraPeriod>("all");
+  const [period, setPeriod] = useState<JiraPeriod>(() => loadLatestRelease() ? "release" : "all");
   const [metricFilter, setMetricFilter] = useState<MetricFilter>("all");
   const [latestRelease, setLatestRelease] = useState<JiraRelease | null>(() => loadLatestRelease());
 
@@ -122,6 +122,10 @@ export function JiraPage() {
       setJql(result.jql ?? "");
       setLatestRelease(result.latestRelease ?? null);
       saveLatestRelease(result.latestRelease ?? null);
+      setPeriod(result.latestRelease ? "release" : "all");
+      setMetricFilter("all");
+      setStatus("all");
+      setPriority("all");
       setLastSync(formatDate(result.syncedAt ?? new Date().toISOString()));
       setInfo(
         result.truncated
@@ -144,6 +148,7 @@ export function JiraPage() {
     setLastSync("");
     setLatestRelease(null);
     saveLatestRelease(null);
+    setPeriod("all");
   }
 
   return (
