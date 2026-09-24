@@ -1,6 +1,12 @@
 import { AlertTriangle, ExternalLink, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { filterIssuesByPeriod, getLatestRelease, type JiraPeriod } from "../services/jira/filters";
+import {
+  filterIssuesByPeriod,
+  loadLatestRelease,
+  saveLatestRelease,
+  type JiraPeriod,
+  type JiraRelease,
+} from "../services/jira/filters";
 import { analyzeJiraRecurrences } from "../services/jira/recurrence";
 import {
   clearJiraIssues,
@@ -17,6 +23,7 @@ interface JiraApiResponse {
   syncedAt?: string;
   truncated?: boolean;
   maxResults?: number;
+  latestRelease?: JiraRelease | null;
   error?: string;
 }
 
@@ -48,6 +55,7 @@ export function JiraPage() {
   const [jql, setJql] = useState("");
   const [period, setPeriod] = useState<JiraPeriod>("all");
   const [metricFilter, setMetricFilter] = useState<MetricFilter>("all");
+  const [latestRelease, setLatestRelease] = useState<JiraRelease | null>(() => loadLatestRelease());
 
   useEffect(() => {
     void loadJiraIssues()
@@ -55,7 +63,6 @@ export function JiraPage() {
       .catch(() => setError("Não foi possível restaurar o cache local dos cards."));
   }, []);
 
-  const latestRelease = useMemo(() => getLatestRelease(issues), [issues]);
   const periodIssues = useMemo(
     () => filterIssuesByPeriod(issues, period, latestRelease),
     [issues, latestRelease, period],
@@ -113,6 +120,8 @@ export function JiraPage() {
       setIssues(synced);
       window.dispatchEvent(new Event("jira-issues-updated"));
       setJql(result.jql ?? "");
+      setLatestRelease(result.latestRelease ?? null);
+      saveLatestRelease(result.latestRelease ?? null);
       setLastSync(formatDate(result.syncedAt ?? new Date().toISOString()));
       setInfo(
         result.truncated
@@ -133,6 +142,8 @@ export function JiraPage() {
     setInfo("");
     setJql("");
     setLastSync("");
+    setLatestRelease(null);
+    saveLatestRelease(null);
   }
 
   return (

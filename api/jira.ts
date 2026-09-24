@@ -2,6 +2,15 @@ interface ApiRequest {
   method?: string;
 }
 
+interface JiraSprint {
+  id?: number;
+  name?: string;
+  state?: string;
+  startDate?: string;
+  endDate?: string;
+  completeDate?: string;
+}
+
 interface ApiResponse {
   status(code: number): ApiResponse;
   setHeader(name: string, value: string): void;
@@ -21,7 +30,6 @@ interface JiraApiIssue {
     issuetype?: { name?: string };
     labels?: string[];
     components?: Array<{ name?: string }>;
-    fixVersions?: Array<{ id?: string; name?: string; released?: boolean; releaseDate?: string }>;
   };
 }
 
@@ -56,14 +64,55 @@ function issueToDto(issue: JiraApiIssue, baseUrl: string) {
     issueType: fields.issuetype?.name ?? "",
     labels: fields.labels ?? [],
     components: (fields.components ?? []).map((component) => component.name).filter(Boolean),
-    fixVersions: (fields.fixVersions ?? []).map((version) => ({
-      id: version.id ?? version.name ?? "",
-      name: version.name ?? "Versão sem nome",
-      released: Boolean(version.released),
-      releaseDate: version.releaseDate ?? "",
-    })).filter((version) => Boolean(version.id)),
     url: issue.key ? `${baseUrl}/browse/${issue.key}` : "",
   };
+}
+
+async function jiraJson<T>(url: string, headers: Record<string, string>): Promise<T> {
+  const jiraResponse = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
+  const data = await jiraResponse.json().catch(() => ({})) as T & { errorMessages?: string[]; message?: string };
+  if (!jiraResponse.ok) {
+    const detail = data.errorMessages?.join(" ") || data.message || `HTTP ${jiraResponse.status}`;
+    throw new Error(`Jira recusou a consulta: ${detail}`);
+  }
+  return data;
+}
+
+async function searchIssues(
+  baseUrl: string,
+  headers: Record<string, string>,
+  jql: string,
+  resultLimit: number,
+): Promise<{ issues: ReturnType<typeof issueToDto>[]; truncated: boolean }> {
+  const fields = "summary,status,priority,assignee,description,created,updated,issuetype,labels,components";
+  const issues: ReturnType<typeof issueToDto>[] = [];
+  let nextPageToken = "";
+
+  do {
+    const params = new URLSearchParams({ jql, fields, maxResults: "100" });
+    if (nextPageToken) params.set("nextPageToken", nextPageToken);
+    const data = await jiraJson<{ issues?: JiraApiIssue[]; nextPageToken?: string }>(
+      `${baseUrl}/rest/api/3/search/jql?${params}`,
+      headers,
+    );
+    issues.push(...(data.issues ?? []).map((issue) => issueToDto(issue, baseUrl)));
+    nextPageToken = data.nextPageToken ?? "";
+  } while (nextPageToken && issues.length < resultLimit);
+
+  return { issues: issues.slice(0, resultLimit), truncated: Boolean(nextPageToken) || issues.length > resultLimit };
+}
+
+async function latestClosedSprint(baseUrl: string, headers: Record<string, string>, boardId: string): Promise<JiraSprint | null> {
+  const params = new URLSearchParams({ state: "closed", startAt: "0", maxResults: "100" });
+  const data = await jiraJson<{ values?: JiraSprint[] }>(
+    `${baseUrl}/rest/agile/1.0/board/${encodeURIComponent(boardId)}/sprint?${params}`,
+    headers,
+  );
+  return [...(data.values ?? [])].sort((left, right) => {
+    const leftDate = left.completeDate || left.endDate || "";
+    const rightDate = right.completeDate || right.endDate || "";
+    return rightDate.localeCompare(leftDate);
+  })[0] ?? null;
 }
 
 export default async function handler(request: ApiRequest, response: ApiResponse): Promise<void> {
@@ -77,6 +126,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const email = process.env.JIRA_EMAIL ?? "";
   const token = process.env.JIRA_API_TOKEN ?? "";
   const jql = process.env.JIRA_JQL ?? "project = DM AND statusCategory != Done ORDER BY updated DESC";
+  const boardId = String(process.env.JIRA_BOARD_ID ?? "3");
   const configuredLimit = Number(process.env.JIRA_MAX_RESULTS ?? 500);
   const resultLimit = Math.min(2_000, Math.max(100, Number.isFinite(configuredLimit) ? configuredLimit : 500));
 
@@ -95,45 +145,38 @@ export default async function handler(request: ApiRequest, response: ApiResponse
 
   const authorization = Buffer.from(`${email}:${token}`).toString("base64");
   const headers = { Authorization: `Basic ${authorization}`, Accept: "application/json" };
-  const fields = "summary,status,priority,assignee,description,created,updated,issuetype,labels,components,fixVersions";
-
   try {
-    const issues: ReturnType<typeof issueToDto>[] = [];
-    let nextPageToken = "";
-    let pages = 0;
+    const mainResult = await searchIssues(baseUrl, headers, jql, resultLimit);
+    let latestRelease: { id: string; name: string; releaseDate: string; issueKeys: string[] } | null = null;
+    let releaseIssues: ReturnType<typeof issueToDto>[] = [];
 
-    do {
-      const params = new URLSearchParams({ jql, fields, maxResults: "100" });
-      if (nextPageToken) params.set("nextPageToken", nextPageToken);
-      const jiraResponse = await fetch(`${baseUrl}/rest/api/3/search/jql?${params}`, {
-        headers,
-        signal: AbortSignal.timeout(20_000),
-      });
-      const data = await jiraResponse.json().catch(() => ({})) as {
-        issues?: JiraApiIssue[];
-        nextPageToken?: string;
-        errorMessages?: string[];
-        message?: string;
-      };
-
-      if (!jiraResponse.ok) {
-        const detail = data.errorMessages?.join(" ") || data.message || `HTTP ${jiraResponse.status}`;
-        throw new Error(`Jira recusou a consulta: ${detail}`);
+    try {
+      const sprint = await latestClosedSprint(baseUrl, headers, boardId);
+      if (sprint?.id) {
+        const releaseResult = await searchIssues(baseUrl, headers, `sprint = ${sprint.id} ORDER BY updated DESC`, resultLimit);
+        releaseIssues = releaseResult.issues;
+        latestRelease = {
+          id: String(sprint.id),
+          name: sprint.name || `Sprint ${sprint.id}`,
+          releaseDate: sprint.completeDate || sprint.endDate || "",
+          issueKeys: releaseIssues.map((issue) => issue.key),
+        };
       }
+    } catch {
+      // A consulta principal continua disponível quando o projeto não usa sprints ou o board não permite acesso.
+    }
 
-      issues.push(...(data.issues ?? []).map((issue) => issueToDto(issue, baseUrl)));
-      nextPageToken = data.nextPageToken ?? "";
-      pages += 1;
-    } while (nextPageToken && issues.length < resultLimit);
-
-    const limitedIssues = issues.slice(0, resultLimit);
+    const byKey = new Map(mainResult.issues.map((issue) => [issue.key, issue]));
+    releaseIssues.forEach((issue) => byKey.set(issue.key, issue));
+    const issues = [...byKey.values()];
     send(response, 200, {
       readOnly: true,
       jql,
-      count: limitedIssues.length,
-      issues: limitedIssues,
-      truncated: Boolean(nextPageToken) || issues.length > resultLimit,
+      count: issues.length,
+      issues,
+      truncated: mainResult.truncated,
       maxResults: resultLimit,
+      latestRelease,
       syncedAt: new Date().toISOString(),
     });
   } catch (error) {

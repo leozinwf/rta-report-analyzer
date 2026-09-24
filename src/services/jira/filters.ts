@@ -6,27 +6,23 @@ export interface JiraRelease {
   id: string;
   name: string;
   releaseDate: string;
+  issueKeys: string[];
 }
 
-export function getLatestRelease(issues: JiraIssue[]): JiraRelease | null {
-  const releases = new Map<string, JiraRelease>();
-  for (const issue of issues) {
-    for (const version of issue.fixVersions ?? []) {
-      if (!version.released || !version.id) continue;
-      const current = releases.get(version.id);
-      if (!current || version.releaseDate > current.releaseDate) {
-        releases.set(version.id, {
-          id: version.id,
-          name: version.name || "Versão sem nome",
-          releaseDate: version.releaseDate,
-        });
-      }
-    }
-  }
+const RELEASE_STORAGE_KEY = "rta-report-analyzer-latest-release";
 
-  return [...releases.values()].sort((left, right) =>
-    right.releaseDate.localeCompare(left.releaseDate) || right.name.localeCompare(left.name)
-  )[0] ?? null;
+export function saveLatestRelease(release: JiraRelease | null): void {
+  if (!release) localStorage.removeItem(RELEASE_STORAGE_KEY);
+  else localStorage.setItem(RELEASE_STORAGE_KEY, JSON.stringify(release));
+}
+
+export function loadLatestRelease(): JiraRelease | null {
+  try {
+    const value = localStorage.getItem(RELEASE_STORAGE_KEY);
+    return value ? JSON.parse(value) as JiraRelease : null;
+  } catch {
+    return null;
+  }
 }
 
 export function filterIssuesByPeriod(
@@ -38,9 +34,8 @@ export function filterIssuesByPeriod(
   if (period === "all") return issues;
   if (period === "release") {
     if (!latestRelease) return [];
-    return issues.filter((issue) =>
-      (issue.fixVersions ?? []).some((version) => version.id === latestRelease.id),
-    );
+    const keys = new Set(latestRelease.issueKeys);
+    return issues.filter((issue) => keys.has(issue.key));
   }
 
   const cutoff = now - Number(period) * 24 * 60 * 60 * 1000;
