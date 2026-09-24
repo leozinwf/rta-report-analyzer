@@ -181,7 +181,7 @@ export function JiraPage() {
       {error ? <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">{error}</div> : null}
       {info ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">{info}</div> : null}
 
-      <section className="sticky top-0 z-30 -mx-2 space-y-3 rounded-2xl border border-line bg-page/95 p-3 shadow-sm backdrop-blur">
+      <section className="sticky top-0 z-30 -mx-2 !mt-0 space-y-2 rounded-b-2xl border border-line bg-panel p-3 shadow-md">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="grid gap-1 text-xs font-medium text-muted">
             Período dos cards
@@ -308,11 +308,11 @@ function Metric({ label, value, active, onClick, hint }: { label: string; value:
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-2xl border p-4 text-left transition ${active ? "border-accent bg-cyan-50 shadow-sm" : "border-line bg-panel hover:border-accent/50 hover:bg-panel-2"}`}
+      className={`rounded-xl border px-4 py-2.5 text-left transition ${active ? "border-accent bg-cyan-50 shadow-sm" : "border-line bg-panel hover:border-accent/50 hover:bg-panel-2"}`}
     >
       <p className={`text-xs font-medium ${active ? "text-accent" : "text-muted"}`}>{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value.toLocaleString("pt-BR")}</p>
-      <p className="mt-1 text-[11px] text-muted">{hint}</p>
+      <p className="mt-0.5 text-xl font-semibold leading-6">{value.toLocaleString("pt-BR")}</p>
+      <p className="mt-0.5 truncate text-[10px] leading-4 text-muted" title={hint}>{hint}</p>
     </button>
   );
 }
