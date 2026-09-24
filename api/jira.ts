@@ -17,6 +17,40 @@ interface ApiResponse {
   json(body: Record<string, unknown>): void;
 }
 
+interface JiraPayload {
+  readOnly: true;
+  jql: string;
+  count: number;
+  issues: ReturnType<typeof issueToDto>[];
+  truncated: boolean;
+  maxResults: number;
+  latestRelease: { id: string; name: string; releaseDate: string; issueKeys: string[] } | null;
+  syncedAt: string;
+}
+
+interface CachedPayload {
+  signature: string;
+  payload: JiraPayload;
+  expiresAt: number;
+  staleUntil: number;
+}
+
+export class JiraHttpError extends Error {
+  readonly status: number;
+  readonly retryAfterSeconds: number;
+
+  constructor(message: string, status: number, retryAfterSeconds = 0) {
+    super(message);
+    this.name = "JiraHttpError";
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+let cachedPayload: CachedPayload | null = null;
+let inFlight: { signature: string; promise: Promise<JiraPayload> } | null = null;
+let blockedUntil = 0;
+
 interface JiraApiIssue {
   key?: string;
   fields?: {
@@ -68,14 +102,44 @@ function issueToDto(issue: JiraApiIssue, baseUrl: string) {
   };
 }
 
-async function jiraJson<T>(url: string, headers: Record<string, string>): Promise<T> {
-  const jiraResponse = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
-  const data = await jiraResponse.json().catch(() => ({})) as T & { errorMessages?: string[]; message?: string };
-  if (!jiraResponse.ok) {
-    const detail = data.errorMessages?.join(" ") || data.message || `HTTP ${jiraResponse.status}`;
-    throw new Error(`Jira recusou a consulta: ${detail}`);
+export function retryAfterMilliseconds(value: string | null, attempt: number, now = Date.now()): number {
+  if (value) {
+    const seconds = Number(value);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1_000);
+    const date = Date.parse(value);
+    if (Number.isFinite(date)) return Math.max(0, date - now);
   }
-  return data;
+  return 500 * (2 ** attempt);
+}
+
+export async function jiraJson<T>(
+  url: string,
+  headers: Record<string, string>,
+  options: { fetcher?: typeof fetch; sleep?: (milliseconds: number) => Promise<void>; maxRetries?: number } = {},
+): Promise<T> {
+  const fetcher = options.fetcher ?? fetch;
+  const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  const maxRetries = options.maxRetries ?? 2;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const jiraResponse = await fetcher(url, { headers, signal: AbortSignal.timeout(20_000) });
+    const data = await jiraResponse.json().catch(() => ({})) as T & { errorMessages?: string[]; message?: string };
+    if (jiraResponse.ok) return data;
+
+    const detail = data.errorMessages?.join(" ") || data.message || `HTTP ${jiraResponse.status}`;
+    const retryMs = retryAfterMilliseconds(jiraResponse.headers.get("retry-after"), attempt);
+    if (jiraResponse.status === 429 && attempt < maxRetries && retryMs <= 3_000) {
+      await sleep(Math.max(250, retryMs));
+      continue;
+    }
+    throw new JiraHttpError(
+      `Jira recusou a consulta: ${detail}`,
+      jiraResponse.status,
+      jiraResponse.status === 429 ? Math.max(1, Math.ceil(retryMs / 1_000)) : 0,
+    );
+  }
+
+  throw new JiraHttpError("Jira recusou a consulta após novas tentativas.", 429, 1);
 }
 
 async function searchIssues(
@@ -115,6 +179,99 @@ async function latestClosedSprint(baseUrl: string, headers: Record<string, strin
   })[0] ?? null;
 }
 
+async function buildJiraPayload(config: {
+  baseUrl: string;
+  headers: Record<string, string>;
+  jql: string;
+  boardId: string;
+  resultLimit: number;
+}): Promise<JiraPayload> {
+  const { baseUrl, headers, jql, boardId, resultLimit } = config;
+  const mainResult = await searchIssues(baseUrl, headers, jql, resultLimit);
+  let latestRelease: JiraPayload["latestRelease"] = null;
+  let releaseIssues: ReturnType<typeof issueToDto>[] = [];
+
+  try {
+    const sprint = await latestClosedSprint(baseUrl, headers, boardId);
+    if (sprint?.id) {
+      const releaseResult = await searchIssues(baseUrl, headers, `sprint = ${sprint.id} ORDER BY updated DESC`, resultLimit);
+      releaseIssues = releaseResult.issues;
+      latestRelease = {
+        id: String(sprint.id),
+        name: sprint.name || `Sprint ${sprint.id}`,
+        releaseDate: sprint.completeDate || sprint.endDate || "",
+        issueKeys: releaseIssues.map((issue) => issue.key),
+      };
+    }
+  } catch (error) {
+    if (error instanceof JiraHttpError && error.status === 429) throw error;
+    // A consulta principal continua disponível quando o projeto não usa sprints ou o board não permite acesso.
+  }
+
+  const byKey = new Map(mainResult.issues.map((issue) => [issue.key, issue]));
+  releaseIssues.forEach((issue) => byKey.set(issue.key, issue));
+  const issues = [...byKey.values()];
+  return {
+    readOnly: true,
+    jql,
+    count: issues.length,
+    issues,
+    truncated: mainResult.truncated,
+    maxResults: resultLimit,
+    latestRelease,
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+async function protectedJiraPayload(config: {
+  signature: string;
+  cacheTtlMs: number;
+  staleTtlMs: number;
+  baseUrl: string;
+  headers: Record<string, string>;
+  jql: string;
+  boardId: string;
+  resultLimit: number;
+}): Promise<{ payload: JiraPayload; cacheStatus: "fresh" | "hit" | "shared" | "stale"; warning?: string }> {
+  const now = Date.now();
+  if (cachedPayload?.signature === config.signature && cachedPayload.expiresAt > now) {
+    return { payload: cachedPayload.payload, cacheStatus: "hit" };
+  }
+  if (blockedUntil > now) {
+    if (cachedPayload?.signature === config.signature && cachedPayload.staleUntil > now) {
+      return { payload: cachedPayload.payload, cacheStatus: "stale", warning: "Jira temporariamente limitado; exibindo o último cache seguro." };
+    }
+    throw new JiraHttpError("Jira temporariamente limitado. Aguarde antes de sincronizar novamente.", 429, Math.ceil((blockedUntil - now) / 1_000));
+  }
+  if (inFlight?.signature === config.signature) {
+    return { payload: await inFlight.promise, cacheStatus: "shared" };
+  }
+
+  const promise = buildJiraPayload(config);
+  inFlight = { signature: config.signature, promise };
+  try {
+    const payload = await promise;
+    const completedAt = Date.now();
+    cachedPayload = {
+      signature: config.signature,
+      payload,
+      expiresAt: completedAt + config.cacheTtlMs,
+      staleUntil: completedAt + config.staleTtlMs,
+    };
+    return { payload, cacheStatus: "fresh" };
+  } catch (error) {
+    if (error instanceof JiraHttpError && error.status === 429) {
+      blockedUntil = Date.now() + Math.max(1, error.retryAfterSeconds) * 1_000;
+    }
+    if (cachedPayload?.signature === config.signature && cachedPayload.staleUntil > Date.now()) {
+      return { payload: cachedPayload.payload, cacheStatus: "stale", warning: "Falha temporária no Jira; exibindo o último cache seguro." };
+    }
+    throw error;
+  } finally {
+    if (inFlight?.promise === promise) inFlight = null;
+  }
+}
+
 export default async function handler(request: ApiRequest, response: ApiResponse): Promise<void> {
   if (request.method !== "GET" && request.method !== "POST") {
     response.setHeader("Allow", "GET, POST");
@@ -129,6 +286,9 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const boardId = String(process.env.JIRA_BOARD_ID ?? "3");
   const configuredLimit = Number(process.env.JIRA_MAX_RESULTS ?? 500);
   const resultLimit = Math.min(2_000, Math.max(100, Number.isFinite(configuredLimit) ? configuredLimit : 500));
+  const configuredCacheSeconds = Number(process.env.JIRA_CACHE_TTL_SECONDS ?? 300);
+  const cacheTtlMs = Math.min(1_800, Math.max(60, Number.isFinite(configuredCacheSeconds) ? configuredCacheSeconds : 300)) * 1_000;
+  const staleTtlMs = Math.max(cacheTtlMs, 30 * 60 * 1_000);
 
   if (!baseUrl || !email || !token) {
     send(response, 503, {
@@ -146,41 +306,26 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const authorization = Buffer.from(`${email}:${token}`).toString("base64");
   const headers = { Authorization: `Basic ${authorization}`, Accept: "application/json" };
   try {
-    const mainResult = await searchIssues(baseUrl, headers, jql, resultLimit);
-    let latestRelease: { id: string; name: string; releaseDate: string; issueKeys: string[] } | null = null;
-    let releaseIssues: ReturnType<typeof issueToDto>[] = [];
-
-    try {
-      const sprint = await latestClosedSprint(baseUrl, headers, boardId);
-      if (sprint?.id) {
-        const releaseResult = await searchIssues(baseUrl, headers, `sprint = ${sprint.id} ORDER BY updated DESC`, resultLimit);
-        releaseIssues = releaseResult.issues;
-        latestRelease = {
-          id: String(sprint.id),
-          name: sprint.name || `Sprint ${sprint.id}`,
-          releaseDate: sprint.completeDate || sprint.endDate || "",
-          issueKeys: releaseIssues.map((issue) => issue.key),
-        };
-      }
-    } catch {
-      // A consulta principal continua disponível quando o projeto não usa sprints ou o board não permite acesso.
-    }
-
-    const byKey = new Map(mainResult.issues.map((issue) => [issue.key, issue]));
-    releaseIssues.forEach((issue) => byKey.set(issue.key, issue));
-    const issues = [...byKey.values()];
-    send(response, 200, {
-      readOnly: true,
+    const signature = `${baseUrl}|${jql}|${boardId}|${resultLimit}`;
+    const result = await protectedJiraPayload({
+      signature,
+      cacheTtlMs,
+      staleTtlMs,
+      baseUrl,
+      headers,
       jql,
-      count: issues.length,
-      issues,
-      truncated: mainResult.truncated,
-      maxResults: resultLimit,
-      latestRelease,
-      syncedAt: new Date().toISOString(),
+      boardId,
+      resultLimit,
     });
+    response.setHeader("X-Jira-Cache", result.cacheStatus);
+    send(response, 200, { ...result.payload, cacheStatus: result.cacheStatus, ...(result.warning ? { warning: result.warning } : {}) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao consultar Jira.";
+    if (error instanceof JiraHttpError && error.status === 429) {
+      response.setHeader("Retry-After", String(Math.max(1, error.retryAfterSeconds)));
+      send(response, 429, { error: message, retryAfterSeconds: Math.max(1, error.retryAfterSeconds) });
+      return;
+    }
     send(response, 502, { error: message });
   }
 }

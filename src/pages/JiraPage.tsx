@@ -24,6 +24,8 @@ interface JiraApiResponse {
   truncated?: boolean;
   maxResults?: number;
   latestRelease?: JiraRelease | null;
+  cacheStatus?: "fresh" | "hit" | "shared" | "stale";
+  warning?: string;
   error?: string;
 }
 
@@ -130,7 +132,7 @@ export function JiraPage() {
       setInfo(
         result.truncated
           ? `${synced.length.toLocaleString("pt-BR")} cards sincronizados (limite de segurança atingido). Restrinja o JIRA_JQL para cards abertos ou recentes.`
-          : `${synced.length.toLocaleString("pt-BR")} cards sincronizados em modo somente leitura.`,
+          : `${synced.length.toLocaleString("pt-BR")} cards sincronizados em modo somente leitura.${result.cacheStatus === "hit" || result.cacheStatus === "shared" ? " Cache protegido reutilizado." : ""}${result.warning ? ` ${result.warning}` : ""}`,
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Falha ao sincronizar o Jira.");
