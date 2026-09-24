@@ -1,4 +1,4 @@
-import { SESSION_COOKIE_NAME } from "../../server/auth";
+import { SESSION_COOKIE_NAME } from "../../server/auth.js";
 
 interface ApiRequest {
   method?: string;

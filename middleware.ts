@@ -1,4 +1,4 @@
-import { readCookie, SESSION_COOKIE_NAME, verifySessionToken } from "./server/auth";
+import { readCookie, SESSION_COOKIE_NAME, verifySessionToken } from "./server/auth.js";
 
 const PUBLIC_PATHS = new Set(["/login", "/api/auth/login"]);
 const VITE_DEV_PATHS = ["/@vite/", "/@fs/", "/@id/", "/src/", "/node_modules/"];
@@ -42,5 +42,6 @@ export default async function middleware(request: Request): Promise<Response | u
 }
 
 export const config = {
+  runtime: "nodejs",
   matcher: ["/((?!assets/|favicon.svg).*)"],
 };

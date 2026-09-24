@@ -2,7 +2,7 @@ import {
   createSessionToken,
   SESSION_COOKIE_NAME,
   verifyAccessPassword,
-} from "../../server/auth";
+} from "../../server/auth.js";
 
 const MAX_PASSWORD_LENGTH = 512;
 
