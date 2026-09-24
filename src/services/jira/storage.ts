@@ -10,6 +10,12 @@ export interface JiraIssue {
   issueType: string;
   labels: string[];
   components: string[];
+  fixVersions?: Array<{
+    id: string;
+    name: string;
+    released: boolean;
+    releaseDate: string;
+  }>;
   url?: string;
 }
 

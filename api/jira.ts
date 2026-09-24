@@ -21,6 +21,7 @@ interface JiraApiIssue {
     issuetype?: { name?: string };
     labels?: string[];
     components?: Array<{ name?: string }>;
+    fixVersions?: Array<{ id?: string; name?: string; released?: boolean; releaseDate?: string }>;
   };
 }
 
@@ -55,6 +56,12 @@ function issueToDto(issue: JiraApiIssue, baseUrl: string) {
     issueType: fields.issuetype?.name ?? "",
     labels: fields.labels ?? [],
     components: (fields.components ?? []).map((component) => component.name).filter(Boolean),
+    fixVersions: (fields.fixVersions ?? []).map((version) => ({
+      id: version.id ?? version.name ?? "",
+      name: version.name ?? "Versão sem nome",
+      released: Boolean(version.released),
+      releaseDate: version.releaseDate ?? "",
+    })).filter((version) => Boolean(version.id)),
     url: issue.key ? `${baseUrl}/browse/${issue.key}` : "",
   };
 }
@@ -88,7 +95,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
 
   const authorization = Buffer.from(`${email}:${token}`).toString("base64");
   const headers = { Authorization: `Basic ${authorization}`, Accept: "application/json" };
-  const fields = "summary,status,priority,assignee,description,created,updated,issuetype,labels,components";
+  const fields = "summary,status,priority,assignee,description,created,updated,issuetype,labels,components,fixVersions";
 
   try {
     const issues: ReturnType<typeof issueToDto>[] = [];

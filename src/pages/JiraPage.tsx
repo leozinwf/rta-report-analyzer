@@ -1,5 +1,6 @@
 import { AlertTriangle, ExternalLink, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { filterIssuesByPeriod, getLatestRelease, type JiraPeriod } from "../services/jira/filters";
 import { analyzeJiraRecurrences } from "../services/jira/recurrence";
 import {
   clearJiraIssues,
@@ -33,6 +34,8 @@ function isHighPriority(priority: string): boolean {
   return /highest|high|alta|alto|cr[ií]tic/i.test(priority);
 }
 
+type MetricFilter = "all" | "open" | "high" | "recurring";
+
 export function JiraPage() {
   const [issues, setIssues] = useState<JiraIssue[]>([]);
   const [query, setQuery] = useState("");
@@ -43,6 +46,8 @@ export function JiraPage() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState("");
   const [jql, setJql] = useState("");
+  const [period, setPeriod] = useState<JiraPeriod>("all");
+  const [metricFilter, setMetricFilter] = useState<MetricFilter>("all");
 
   useEffect(() => {
     void loadJiraIssues()
@@ -50,31 +55,50 @@ export function JiraPage() {
       .catch(() => setError("Não foi possível restaurar o cache local dos cards."));
   }, []);
 
+  const latestRelease = useMemo(() => getLatestRelease(issues), [issues]);
+  const periodIssues = useMemo(
+    () => filterIssuesByPeriod(issues, period, latestRelease),
+    [issues, latestRelease, period],
+  );
   const statuses = useMemo(
-    () => [...new Set(issues.map((issue) => issue.status || "N/D"))].sort(),
-    [issues],
+    () => [...new Set(periodIssues.map((issue) => issue.status || "N/D"))].sort(),
+    [periodIssues],
   );
   const priorities = useMemo(
-    () => [...new Set(issues.map((issue) => issue.priority || "N/D"))].sort(),
-    [issues],
+    () => [...new Set(periodIssues.map((issue) => issue.priority || "N/D"))].sort(),
+    [periodIssues],
   );
-  const recurrences = useMemo(() => analyzeJiraRecurrences(issues), [issues]);
-  const openCount = useMemo(() => issues.filter((issue) => !isClosed(issue.status)).length, [issues]);
+  const recurrences = useMemo(() => analyzeJiraRecurrences(periodIssues), [periodIssues]);
+  const recurringIssueKeys = useMemo(
+    () => new Set(recurrences.flatMap((group) => group.issues.map((issue) => issue.key))),
+    [recurrences],
+  );
+  const openCount = useMemo(() => periodIssues.filter((issue) => !isClosed(issue.status)).length, [periodIssues]);
   const highPriorityCount = useMemo(
-    () => issues.filter((issue) => isHighPriority(issue.priority) && !isClosed(issue.status)).length,
-    [issues],
+    () => periodIssues.filter((issue) => isHighPriority(issue.priority) && !isClosed(issue.status)).length,
+    [periodIssues],
   );
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return issues.filter((issue) => {
+    return periodIssues.filter((issue) => {
+      if (metricFilter === "open" && isClosed(issue.status)) return false;
+      if (metricFilter === "high" && (!isHighPriority(issue.priority) || isClosed(issue.status))) return false;
+      if (metricFilter === "recurring" && !recurringIssueKeys.has(issue.key)) return false;
       if (status !== "all" && (issue.status || "N/D") !== status) return false;
       if (priority !== "all" && (issue.priority || "N/D") !== priority) return false;
       if (!normalizedQuery) return true;
       return [issue.key, issue.summary, issue.status, issue.priority, issue.assignee, issue.description]
         .some((value) => value.toLowerCase().includes(normalizedQuery));
     });
-  }, [issues, priority, query, status]);
+  }, [metricFilter, periodIssues, priority, query, recurringIssueKeys, status]);
+
+  function changePeriod(value: JiraPeriod) {
+    setPeriod(value);
+    setMetricFilter("all");
+    setStatus("all");
+    setPriority("all");
+  }
 
   async function syncJira() {
     setSyncing(true);
@@ -146,14 +170,39 @@ export function JiraPage() {
       {error ? <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">{error}</div> : null}
       {info ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">{info}</div> : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Cards carregados" value={issues.length} />
-        <Metric label="Cards abertos" value={openCount} />
-        <Metric label="Prioridade alta/crítica" value={highPriorityCount} />
-        <Metric label="Grupos recorrentes" value={recurrences.length} />
+      <section className="sticky top-0 z-30 -mx-2 space-y-3 rounded-2xl border border-line bg-page/95 p-3 shadow-sm backdrop-blur">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <label className="grid gap-1 text-xs font-medium text-muted">
+            Período dos cards
+            <select
+              value={period}
+              onChange={(event) => changePeriod(event.target.value as JiraPeriod)}
+              className="min-w-48 rounded-xl border border-line bg-panel px-3 py-2 text-sm text-ink"
+            >
+              <option value="release" disabled={!latestRelease}>
+                {latestRelease ? `Última release · ${latestRelease.name}` : "Última release · sincronize novamente"}
+              </option>
+              <option value="30">Últimos 30 dias</option>
+              <option value="60">Últimos 60 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="120">Últimos 120 dias</option>
+              <option value="180">Últimos 180 dias</option>
+              <option value="all">Todos os cards</option>
+            </select>
+          </label>
+          <p className="text-xs text-muted">
+            {periodIssues.length.toLocaleString("pt-BR")} de {issues.length.toLocaleString("pt-BR")} cards sincronizados
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric label="Cards carregados" value={periodIssues.length} active={metricFilter === "all"} onClick={() => setMetricFilter("all")} hint="Mostrar todos do período" />
+          <Metric label="Cards abertos" value={openCount} active={metricFilter === "open"} onClick={() => setMetricFilter(metricFilter === "open" ? "all" : "open")} hint="Filtrar cards ainda abertos" />
+          <Metric label="Prioridade alta/crítica" value={highPriorityCount} active={metricFilter === "high"} onClick={() => setMetricFilter(metricFilter === "high" ? "all" : "high")} hint="Filtrar prioridades altas em aberto" />
+          <Metric label="Grupos recorrentes" value={recurrences.length} active={metricFilter === "recurring"} onClick={() => setMetricFilter(metricFilter === "recurring" ? "all" : "recurring")} hint={`${recurringIssueKeys.size.toLocaleString("pt-BR")} cards relacionados`} />
+        </div>
       </section>
 
-      {recurrences.length ? (
+      {recurrences.length && (metricFilter === "all" || metricFilter === "recurring") ? (
         <section>
           <div className="mb-3">
             <h3 className="text-lg font-semibold">Possíveis recorrências</h3>
@@ -219,7 +268,7 @@ export function JiraPage() {
                   <tr><th className="p-3">Chave</th><th className="p-3">Resumo</th><th className="p-3">Status</th><th className="p-3">Prioridade</th><th className="p-3">Responsável</th><th className="p-3">Atualizado</th></tr>
                 </thead>
                 <tbody>
-                  {filtered.slice(0, 500).map((issue) => (
+                  {filtered.map((issue) => (
                     <tr key={issue.key} className="border-t border-line hover:bg-panel-2/60">
                       <td className="p-3 font-semibold text-accent">
                         <a href={issue.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">{issue.key}<ExternalLink className="size-3" /></a>
@@ -234,7 +283,7 @@ export function JiraPage() {
                 </tbody>
               </table>
             </div>
-            <p className="border-t border-line px-4 py-3 text-xs text-muted">Mostrando {Math.min(filtered.length, 500).toLocaleString("pt-BR")} de {filtered.length.toLocaleString("pt-BR")} cards filtrados.</p>
+            <p className="border-t border-line px-4 py-3 text-xs text-muted">Mostrando {filtered.length.toLocaleString("pt-BR")} de {periodIssues.length.toLocaleString("pt-BR")} cards do período.</p>
           </div>
         )}
       </section>
@@ -242,6 +291,17 @@ export function JiraPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-2xl border border-line bg-panel p-4"><p className="text-xs text-muted">{label}</p><p className="mt-1 text-2xl font-semibold">{value.toLocaleString("pt-BR")}</p></div>;
+function Metric({ label, value, active, onClick, hint }: { label: string; value: number; active: boolean; onClick: () => void; hint: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-2xl border p-4 text-left transition ${active ? "border-accent bg-cyan-50 shadow-sm" : "border-line bg-panel hover:border-accent/50 hover:bg-panel-2"}`}
+    >
+      <p className={`text-xs font-medium ${active ? "text-accent" : "text-muted"}`}>{label}</p>
+      <p className="mt-1 text-2xl font-semibold">{value.toLocaleString("pt-BR")}</p>
+      <p className="mt-1 text-[11px] text-muted">{hint}</p>
+    </button>
+  );
 }
