@@ -28,6 +28,18 @@ function normalize(value: string): string {
     .trim();
 }
 
+function normalizedSource(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\b[a-z]+-\d+\b/g, " ")
+    .replace(/\b[0-9a-f]{8,}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function meaningfulTerms(summary: string): Set<string> {
   return new Set(
     normalize(summary)
@@ -40,6 +52,37 @@ function supplierScope(summary: string): string {
   return normalize(summary).match(/fornecedor\s+([a-z0-9]+)/)?.[1] ?? "";
 }
 
+interface IssueScope {
+  type: "robot" | "supplier" | "document" | "location" | "exact";
+  value: string;
+}
+
+function cleanScope(value: string): string {
+  return value
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function issueScope(summary: string): IssueScope {
+  const source = normalizedSource(summary);
+  const robot = source.match(/\bcrt[a-z0-9]{4,}\b/)?.[0];
+  if (robot) return { type: "robot", value: robot };
+
+  const supplier = supplierScope(summary);
+  if (supplier) return { type: "supplier", value: supplier };
+
+  const document = source.match(/\b(dare|darf|dae|dam)\s*[-/]?\s*(\d{2,})\b/);
+  if (document) return { type: "document", value: `${document[1]}-${document[2]}` };
+
+  const location = source.match(
+    /\b(?:municipio(?:\s+de)?|estado\s+de)\s+(.+?)(?=\s+-\s+(?:[a-z]{2}\b|ocorreu\b|tempo\b|ha\b|nao\b)|\s+(?:ocorreu|tempo|ha cenarios|nao foi)\b|$)/,
+  )?.[1];
+  if (location) return { type: "location", value: cleanScope(location) };
+
+  return { type: "exact", value: cleanScope(source) };
+}
+
 function similarity(left: Set<string>, right: Set<string>): number {
   if (!left.size || !right.size) return 0;
   let intersection = 0;
@@ -48,21 +91,21 @@ function similarity(left: Set<string>, right: Set<string>): number {
 }
 
 export function analyzeJiraRecurrences(issues: JiraIssue[]): JiraRecurrence[] {
-  const groups: Array<{ terms: Set<string>; supplier: string; issues: JiraIssue[] }> = [];
+  const groups: Array<{ terms: Set<string>; scope: IssueScope; issues: JiraIssue[] }> = [];
 
   for (const issue of issues) {
     const terms = meaningfulTerms(issue.summary);
-    const supplier = supplierScope(issue.summary);
+    const scope = issueScope(issue.summary);
     if (!terms.size) continue;
     const group = groups.find((candidate) => {
-      if ((candidate.supplier || supplier) && candidate.supplier !== supplier) return false;
+      if (candidate.scope.type !== scope.type || candidate.scope.value !== scope.value) return false;
+      if (scope.type === "exact") return true;
       return similarity(candidate.terms, terms) >= 0.7;
     });
     if (group) {
       group.issues.push(issue);
-      for (const term of terms) group.terms.add(term);
     } else {
-      groups.push({ terms, supplier, issues: [issue] });
+      groups.push({ terms, scope, issues: [issue] });
     }
   }
 

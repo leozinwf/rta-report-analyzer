@@ -157,7 +157,7 @@ export function JiraPage() {
         <section>
           <div className="mb-3">
             <h3 className="text-lg font-semibold">Possíveis recorrências</h3>
-            <p className="text-sm text-muted">Agrupamento por semelhança dos títulos. Revise os cards antes de tomar qualquer decisão.</p>
+            <p className="text-sm text-muted">Cards do mesmo robô, fornecedor ou local com sintomas semelhantes. Revise antes de tomar qualquer decisão.</p>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
             {recurrences.slice(0, 8).map((group) => (
@@ -167,7 +167,7 @@ export function JiraPage() {
                     <p className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900">
                       <AlertTriangle className="size-4" /> {group.title}
                     </p>
-                    <p className="mt-1 text-xs text-amber-800">{group.count} cards semelhantes · atualizado em {formatDate(group.latestUpdated)}</p>
+                    <p className="mt-1 text-xs text-amber-800">{group.count} ocorrências relacionadas · atualizado em {formatDate(group.latestUpdated)}</p>
                   </div>
                   <span className="rounded-full bg-amber-200 px-2.5 py-1 text-xs font-bold text-amber-950">{group.count}</span>
                 </div>
